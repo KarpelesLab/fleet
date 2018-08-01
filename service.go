@@ -13,7 +13,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// embed connection in a separate object to avoid confusing go's HTTP server (among other shit)
+// embed connection in a separate object to avoid confusing go's HTTP server (among other stuff)
 type ServiceConn struct {
 	net.Conn
 }
