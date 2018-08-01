@@ -2,6 +2,7 @@ package fleet
 
 import (
 	"bytes"
+	"crypto/hmac"
 	"crypto/rand"
 	"fmt"
 	"log"
@@ -50,6 +51,12 @@ func initSeed() {
 
 func SeedId() uuid.UUID {
 	return seed.Id
+}
+
+func SeedSign(in []byte) []byte {
+	hmac := hmac.New(sha3.New256, seed.seed)
+	hmac.Write(in)
+	return hmac.Sum([]byte{})
 }
 
 func seedPacket() *Packet {
