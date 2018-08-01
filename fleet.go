@@ -261,7 +261,7 @@ func (a *AgentObj) DumpInfo(w io.Writer) {
 	fmt.Fprintf(w, "=======================\n\n")
 	fmt.Fprintf(w, "Local name: %s\n", a.name)
 	fmt.Fprintf(w, "Local ID:   %s\n", a.id)
-	fmt.Fprintf(w, "Seed ID:    %s\n", SeedId())
+	fmt.Fprintf(w, "Seed ID:    %s (seed stamp: %s)\n", SeedId(), seed.ts)
 	fmt.Fprintf(w, "\n")
 
 	a.peersMutex.RLock()
