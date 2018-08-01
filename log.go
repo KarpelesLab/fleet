@@ -10,7 +10,7 @@ import (
 
 var logbuf *ringbuf.Writer
 
-func init() {
+func initLog() {
 	var err error
 
 	logbuf, err = ringbuf.New(1024 * 1024)

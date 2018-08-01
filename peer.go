@@ -31,14 +31,14 @@ type Peer struct {
 	annTime time.Time
 	Ping    time.Duration
 
-	a *Agent
+	a *AgentObj
 
 	mutex *sync.RWMutex
 
 	alive chan interface{}
 }
 
-func (a *Agent) newConn(c net.Conn) {
+func (a *AgentObj) newConn(c net.Conn) {
 	tc, ok := c.(*tls.Conn)
 	if !ok {
 		log.Printf("[fleet] non-tls connection recieved?")
@@ -67,7 +67,7 @@ func (a *Agent) newConn(c net.Conn) {
 	}
 }
 
-func (a *Agent) handleFleetConn(tc *tls.Conn) {
+func (a *AgentObj) handleFleetConn(tc *tls.Conn) {
 	// instanciate peer and fetch certificate
 	p := new(Peer)
 	p.c = tc

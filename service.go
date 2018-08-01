@@ -18,15 +18,15 @@ type ServiceConn struct {
 	net.Conn
 }
 
-func (a *Agent) RoundTripper() http.RoundTripper {
+func (a *AgentObj) RoundTripper() http.RoundTripper {
 	return a.transport
 }
 
-func (a *Agent) DialContext(c context.Context, network, addr string) (net.Conn, error) {
+func (a *AgentObj) DialContext(c context.Context, network, addr string) (net.Conn, error) {
 	return a.Dial(network, addr)
 }
 
-func (a *Agent) Dial(network, addr string) (net.Conn, error) {
+func (a *AgentObj) Dial(network, addr string) (net.Conn, error) {
 	// addr is in the form of <service>.<id>:<irrelevant port>
 
 	addr, _, err := net.SplitHostPort(addr)
@@ -52,7 +52,7 @@ func (a *Agent) Dial(network, addr string) (net.Conn, error) {
 }
 
 // connect to given peer under specified protocol (if supported)
-func (a *Agent) Connect(id uuid.UUID, service string) (net.Conn, error) {
+func (a *AgentObj) Connect(id uuid.UUID, service string) (net.Conn, error) {
 	p := a.GetPeer(id)
 	if p == nil {
 		return nil, errors.New("no route to peer")
@@ -106,13 +106,13 @@ func (a *Agent) Connect(id uuid.UUID, service string) (net.Conn, error) {
 	return &ServiceConn{Conn: c}, nil
 }
 
-func (a *Agent) AddService(service string) chan net.Conn {
+func (a *AgentObj) AddService(service string) chan net.Conn {
 	a.services[service] = make(chan net.Conn)
 
 	return a.services[service]
 }
 
-func (a *Agent) handleServiceConn(tc *tls.Conn) {
+func (a *AgentObj) handleServiceConn(tc *tls.Conn) {
 	res := make([]byte, 1)
 	_, err := io.ReadFull(tc, res)
 	if err != nil {
@@ -140,7 +140,7 @@ func (a *Agent) handleServiceConn(tc *tls.Conn) {
 	a.forwardConnection(string(res), tc)
 }
 
-func (a *Agent) forwardConnection(service string, c net.Conn) {
+func (a *AgentObj) forwardConnection(service string, c net.Conn) {
 	ch, ok := a.services[service]
 	if !ok {
 		err := []byte("no such service")

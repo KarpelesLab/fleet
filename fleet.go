@@ -19,9 +19,9 @@ import (
 	"github.com/google/uuid"
 )
 
-var DefaultAgent *Agent
+var Agent *AgentObj
 
-type Agent struct {
+type AgentObj struct {
 	socket net.Listener
 
 	id   uuid.UUID
@@ -43,13 +43,22 @@ type Agent struct {
 	transport http.RoundTripper
 }
 
-func NewAgent() (a *Agent, err error) {
-	a = new(Agent)
+func initAgent() {
+	Agent = new(AgentObj)
 
-	a.peers = make(map[uuid.UUID]*Peer)
-	a.peersMutex = new(sync.RWMutex)
-	a.services = make(map[string]chan net.Conn)
+	// init code
 
+	Agent.peers = make(map[uuid.UUID]*Peer)
+	Agent.peersMutex = new(sync.RWMutex)
+	Agent.services = make(map[string]chan net.Conn)
+
+	err := Agent.doInit()
+	if err != nil {
+		log.Printf("[agent] failed to init agent: %s", err)
+	}
+}
+
+func (a *AgentObj) doInit() (err error) {
 	// load fleet info
 	fleet_info, err := ioutil.ReadFile("fleet.json")
 	if err != nil {
@@ -66,8 +75,6 @@ func NewAgent() (a *Agent, err error) {
 		return
 	}
 	a.name = a.self.Name
-
-	a.connectHosts()
 
 	a.cert, err = tls.LoadX509KeyPair("internal_key.pem", "internal_key.key")
 	if err != nil {
@@ -113,19 +120,19 @@ func NewAgent() (a *Agent, err error) {
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 
+	a.connectHosts()
+
 	go a.listenLoop()
 	go a.eventLoop()
-
-	DefaultAgent = a
 
 	return
 }
 
-func (a *Agent) Id() uuid.UUID {
+func (a *AgentObj) Id() uuid.UUID {
 	return a.id
 }
 
-func (a *Agent) connectHosts() {
+func (a *AgentObj) connectHosts() {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
 
@@ -147,7 +154,7 @@ func (a *Agent) connectHosts() {
 	}
 }
 
-func (a *Agent) dialPeer(host, name string, id uuid.UUID) {
+func (a *AgentObj) dialPeer(host, name string, id uuid.UUID) {
 	if id == a.id {
 		// avoid connect to self
 		return
@@ -174,14 +181,14 @@ func (a *Agent) dialPeer(host, name string, id uuid.UUID) {
 	a.newConn(c)
 }
 
-func (a *Agent) IsConnected(id uuid.UUID) bool {
+func (a *AgentObj) IsConnected(id uuid.UUID) bool {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
 	_, ok := a.peers[id]
 	return ok
 }
 
-func (a *Agent) listenLoop() {
+func (a *AgentObj) listenLoop() {
 	for {
 		conn, err := a.socket.Accept()
 		if err != nil {
@@ -193,7 +200,7 @@ func (a *Agent) listenLoop() {
 	}
 }
 
-func (a *Agent) eventLoop() {
+func (a *AgentObj) eventLoop() {
 	announce := time.NewTicker(5 * time.Second)
 	peerConnect := time.NewTicker(5 * time.Minute)
 
@@ -207,7 +214,7 @@ func (a *Agent) eventLoop() {
 	}
 }
 
-func (a *Agent) doAnnounce() {
+func (a *AgentObj) doAnnounce() {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
 
@@ -232,7 +239,7 @@ func (a *Agent) doAnnounce() {
 	}
 }
 
-func (a *Agent) doBroadcast(pkt *Packet, except_id uuid.UUID) {
+func (a *AgentObj) doBroadcast(pkt *Packet, except_id uuid.UUID) {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
 
@@ -249,7 +256,7 @@ func (a *Agent) doBroadcast(pkt *Packet, except_id uuid.UUID) {
 	}
 }
 
-func (a *Agent) DumpInfo(w io.Writer) {
+func (a *AgentObj) DumpInfo(w io.Writer) {
 	fmt.Fprintf(w, "Fleet Agent Information\n")
 	fmt.Fprintf(w, "=======================\n\n")
 	fmt.Fprintf(w, "Local name: %s\n", a.name)
@@ -269,13 +276,13 @@ func (a *Agent) DumpInfo(w io.Writer) {
 	}
 }
 
-func (a *Agent) GetPeer(id uuid.UUID) *Peer {
+func (a *AgentObj) GetPeer(id uuid.UUID) *Peer {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
 	return a.peers[id]
 }
 
-func (a *Agent) GetPeerByName(name string) *Peer {
+func (a *AgentObj) GetPeerByName(name string) *Peer {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
 
@@ -288,7 +295,7 @@ func (a *Agent) GetPeerByName(name string) *Peer {
 	return nil
 }
 
-func (a *Agent) handleAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
+func (a *AgentObj) handleAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 	p := a.GetPeer(ann.Id)
 
 	if p == nil {
@@ -300,7 +307,7 @@ func (a *Agent) handleAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 	return p.processAnnounce(ann, fromPeer)
 }
 
-func (a *Agent) SendTo(target uuid.UUID, pkt *Packet) error {
+func (a *AgentObj) SendTo(target uuid.UUID, pkt *Packet) error {
 	p := a.GetPeer(target) // TODO find best route instead of using GetPeer
 	if p == nil {
 		return errors.New("no route to peer")
