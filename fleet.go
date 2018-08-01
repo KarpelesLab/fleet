@@ -46,12 +46,6 @@ type AgentObj struct {
 func initAgent() {
 	Agent = new(AgentObj)
 
-	// init code
-
-	Agent.peers = make(map[uuid.UUID]*Peer)
-	Agent.peersMutex = new(sync.RWMutex)
-	Agent.services = make(map[string]chan net.Conn)
-
 	err := Agent.doInit()
 	if err != nil {
 		log.Printf("[agent] failed to init agent: %s", err)
@@ -59,6 +53,12 @@ func initAgent() {
 }
 
 func (a *AgentObj) doInit() (err error) {
+	a.peers = make(map[uuid.UUID]*Peer)
+	a.peersMutex = new(sync.RWMutex)
+	a.services = make(map[string]chan net.Conn)
+
+	a.name = "local"
+
 	// load fleet info
 	fleet_info, err := ioutil.ReadFile("fleet.json")
 	if err != nil {
