@@ -19,7 +19,7 @@ var (
 
 const UUID_SEEDID_SPACE = "da736663-83ec-46ef-9c29-3f9102c5c519"
 
-func init() {
+func initSeed() {
 	seed = make([]byte, 128)
 	_, err := rand.Read(seed)
 	if err != nil {
