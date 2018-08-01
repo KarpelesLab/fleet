@@ -13,8 +13,11 @@ import (
 )
 
 var (
-	seed []byte
-	ts   time.Time
+	seed   []byte
+	seedId uuid.UUID
+	ts     time.Time
+
+	uuidSeedidSpace = uuid.Must(uuid.Parse(UUID_SEEDID_SPACE))
 )
 
 const UUID_SEEDID_SPACE = "da736663-83ec-46ef-9c29-3f9102c5c519"
@@ -26,25 +29,20 @@ func initSeed() {
 		panic(fmt.Sprintf("failed to initialize fleet seed: %s", err))
 	}
 	ts = time.Now()
+	updateSeedId()
 
 	log.Printf("[fleet] Initialized with cluster seed ID = %s", SeedId())
 }
 
-func SeedUuid() uuid.UUID {
-	// return an id for the seed
-	space := uuid.Must(uuid.Parse(UUID_SEEDID_SPACE))
-	uuid := uuid.NewHash(sha3.New256(), space, seed, 6) // uuid v6 - this is not in uuid specifications
-	return uuid
+func updateSeedId() {
+	seedId = uuid.NewHash(sha3.New256(), uuidSeedidSpace, seed, 6) // uuid v6 - this is not in uuid specifications
 }
 
-func SeedId() string {
-	// return an id for the seed
-	space := uuid.Must(uuid.Parse(UUID_SEEDID_SPACE))
-	uuid := uuid.NewHash(sha3.New256(), space, seed, 6) // uuid v6 - this is not in uuid specifications
-	return uuid.String()
+func SeedId() uuid.UUID {
+	return seedId
 }
 
-func SeedPacket() *Packet {
+func seedPacket() *Packet {
 	pkt := &Packet{Type: P_SEED}
 	pkt.SetPayload(PacketSeed{
 		Seed: seed,
@@ -69,6 +67,7 @@ func handleNewSeed(s []byte, t time.Time) error {
 		}
 	}
 	copy(seed, s)
+	updateSeedId()
 	log.Printf("[fleet] Updated seed from peer, new seed ID = %s", SeedId())
 	return nil
 }

@@ -319,5 +319,5 @@ func (p *Peer) sendHandshake() error {
 	if err != nil {
 		return err
 	}
-	return p.Send(SeedPacket())
+	return p.Send(seedPacket())
 }
