@@ -8,7 +8,9 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
+	"os"
 	"time"
 
 	"golang.org/x/crypto/sha3"
@@ -42,18 +44,58 @@ func makeSeed(s []byte, t time.Time) *seedData {
 
 func initSeed() {
 	s := make([]byte, 128)
+
+	if f, err := os.Open("fleet_seed.bin"); err == nil {
+		defer f.Close()
+		// let's try to read the seed from there?
+		n, err := f.Read(s)
+		if n == 128 && err == nil {
+			// read the timestamp
+			tsBin, err := ioutil.ReadAll(f)
+			if err == nil {
+				t := time.Time{}
+				if t.UnmarshalBinary(tsBin) == nil {
+					// managed to read time too!
+					seed = makeSeed(s, t)
+					log.Printf("[fleet] Initialized with saved cluster seed ID = %s", SeedId())
+					return
+				}
+			}
+		}
+	}
+
 	_, err := rand.Read(s)
 	if err != nil {
 		panic(fmt.Sprintf("failed to initialize fleet seed: %s", err))
 	}
 
 	seed = makeSeed(s, time.Now())
+	seed.WriteToDisk()
 
 	log.Printf("[fleet] Initialized with cluster seed ID = %s", SeedId())
 }
 
 func SeedId() uuid.UUID {
 	return seed.Id
+}
+
+func (s *seedData) WriteToDisk() error {
+	ts, err := s.ts.MarshalBinary()
+	if err != nil {
+		return err
+	}
+
+	f, err := os.OpenFile("fleet_seed.bin~", os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0600)
+	if err != nil {
+		return err
+	}
+	f.Write(s.seed)
+	f.Write(ts)
+	f.Close()
+
+	os.Rename("fleet_seed.bin~", "fleet_seed.bin")
+
+	return nil
 }
 
 func SeedSign(in []byte) []byte {
@@ -127,6 +169,7 @@ func handleNewSeed(s []byte, t time.Time) error {
 		}
 	}
 	seed = makeSeed(s, t)
+	seed.WriteToDisk()
 	log.Printf("[fleet] Updated seed from peer, new seed ID = %s", SeedId())
 	return nil
 }
