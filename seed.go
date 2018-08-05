@@ -85,13 +85,11 @@ func (s *seedData) WriteToDisk() error {
 		return err
 	}
 
-	f, err := os.OpenFile("fleet_seed.bin~", os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0600)
+	err = ioutil.WriteFile("fleet_seed.bin~", append(seed.seed, ts...), 0600)
+
 	if err != nil {
 		return err
 	}
-	f.Write(s.seed)
-	f.Write(ts)
-	f.Close()
 
 	os.Rename("fleet_seed.bin~", "fleet_seed.bin")
 
