@@ -16,7 +16,11 @@ func initLog() {
 	logbuf, err = ringbuf.New(1024 * 1024)
 	if err == nil {
 		log.SetOutput(logbuf)
-		go io.Copy(os.Stdout, logbuf.BlockingReader())
+		go func() {
+			r := logbuf.BlockingReader()
+			defer r.Close()
+			io.Copy(os.Stdout, r)
+		}()
 	} else {
 		log.Printf("[fleet] Failed to setup logbuf: %s", err)
 	}
@@ -27,5 +31,11 @@ func LogTarget() io.Writer {
 }
 
 func LogDmesg(w io.Writer) (int64, error) {
-	return io.Copy(w, logbuf.Reader())
+	r := logbuf.Reader()
+	defer r.Close()
+	return io.Copy(w, r)
+}
+
+func Shutdown() {
+	logbuf.Close()
 }
