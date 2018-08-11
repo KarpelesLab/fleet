@@ -252,7 +252,7 @@ func (p *Peer) Send(pkt Packet) error {
 	p.write.Lock()
 	defer p.write.Unlock()
 
-	err := p.enc.Encode(pkt)
+	err := p.enc.Encode(&pkt)
 	if err != nil {
 		log.Printf("[fleet] Write to peer failed")
 		p.c.Close()
