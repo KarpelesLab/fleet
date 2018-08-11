@@ -20,7 +20,10 @@ import (
 	"github.com/google/uuid"
 )
 
-var Agent *AgentObj
+var (
+	Agent *AgentObj
+	rpcE  map[string]RpcEndpoint
+)
 
 type AgentObj struct {
 	socket net.Listener
@@ -44,7 +47,6 @@ type AgentObj struct {
 	transport http.RoundTripper
 
 	rpc  map[uintptr]chan *PacketRpcResponse
-	rpcE map[string]RpcEndpoint
 	rpcL sync.RWMutex
 }
 
@@ -62,7 +64,6 @@ func (a *AgentObj) doInit() (err error) {
 	a.peersMutex = new(sync.RWMutex)
 	a.services = make(map[string]chan net.Conn)
 	a.rpc = make(map[uintptr]chan *PacketRpcResponse)
-	a.rpcE = make(map[string]RpcEndpoint)
 
 	a.name = "local"
 
@@ -162,7 +163,10 @@ func (a *AgentObj) connectHosts() {
 }
 
 func (a *AgentObj) SetEndpoint(e string, f RpcEndpoint) {
-	a.rpcE[e] = f
+	if rpcE == nil {
+		rpcE = make(map[string]RpcEndpoint)
+	}
+	rpcE[e] = f
 }
 
 func (a *AgentObj) RPC(id uuid.UUID, endpoint string, data interface{}) (interface{}, error) {
@@ -223,7 +227,7 @@ func (a *AgentObj) handleRpc(pkt *PacketRpc) error {
 		}()
 
 		var err error
-		res.Data, err = a.rpcE[pkt.Endpoint](pkt.Data)
+		res.Data, err = rpcE[pkt.Endpoint](pkt.Data)
 		if err != nil {
 			res.Error = err.Error()
 			res.HasError = true
