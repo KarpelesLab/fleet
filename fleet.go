@@ -224,14 +224,13 @@ func (a *AgentObj) doAnnounce() {
 
 	x := atomic.AddUint64(&a.announceIdx, 1)
 
-	pkt := &Packet{Type: P_ANNOUNCE}
-	pkt.SetPayload(PacketAnnounce{
+	pkt := &PacketAnnounce{
 		Id:  a.id,
 		Now: time.Now(),
 		Idx: x,
 		Ip:  a.self.Ip,
 		AZ:  a.self.AZ,
-	})
+	}
 
 	for _, p := range a.peers {
 		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
@@ -239,7 +238,7 @@ func (a *AgentObj) doAnnounce() {
 	}
 }
 
-func (a *AgentObj) doBroadcast(pkt *Packet, except_id uuid.UUID) {
+func (a *AgentObj) doBroadcast(pkt interface{}, except_id uuid.UUID) {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
 
@@ -307,7 +306,7 @@ func (a *AgentObj) handleAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 	return p.processAnnounce(ann, fromPeer)
 }
 
-func (a *AgentObj) SendTo(target uuid.UUID, pkt *Packet) error {
+func (a *AgentObj) SendTo(target uuid.UUID, pkt interface{}) error {
 	p := a.GetPeer(target) // TODO find best route instead of using GetPeer
 	if p == nil {
 		return errors.New("no route to peer")

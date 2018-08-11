@@ -3,6 +3,7 @@ package fleet
 import (
 	"crypto/tls"
 	"encoding/asn1"
+	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -23,6 +24,7 @@ type Peer struct {
 	name      string
 	addr      *net.TCPAddr
 	valid     bool
+	enc       *gob.Encoder
 
 	write *sync.Mutex
 
@@ -77,6 +79,7 @@ func (a *AgentObj) handleFleetConn(tc *tls.Conn) {
 	p.write = &sync.Mutex{}
 	p.mutex = &sync.RWMutex{}
 	p.alive = make(chan interface{})
+	p.enc = gob.NewEncoder(p.c)
 	err := p.fetchUuidFromCertificate()
 	if err != nil {
 		log.Printf("[fleet] failed to get peer id: %s", err)
@@ -105,9 +108,11 @@ func (p *Peer) retryLater(t time.Duration) {
 
 func (p *Peer) loop() {
 	// read from peer
-	pkt := &Packet{}
+	dec := gob.NewDecoder(p.c)
+	var pkt interface{}
+
 	for {
-		err := pkt.ParseStream(p.c)
+		err := dec.Decode(&pkt)
 		if err != nil {
 			if err == io.EOF {
 				log.Printf("[fleet] disconnected peer %s", p.id)
@@ -147,48 +152,28 @@ func (p *Peer) monitor() {
 	}
 }
 
-func (p *Peer) handlePacket(pkt *Packet) error {
-	switch pkt.Type {
-	case P_HANDSHAKE:
-		var h PacketHandshake
-		err := pkt.ReadPayload(&h)
-		if err != nil {
-			return err
-		}
-		if h.Id != p.id {
+func (p *Peer) handlePacket(pktI interface{}) error {
+	switch pkt := pktI.(type) {
+	case *PacketHandshake:
+		if pkt.Id != p.id {
 			return errors.New("invalid handshake")
 		}
-		p.name = h.Name
-		goupd.SignalVersion(h.Git, h.Build)
+		p.name = pkt.Name
+		goupd.SignalVersion(pkt.Git, pkt.Build)
 		// TODO calculate offset
 		return nil
-	case P_SEED:
-		var s PacketSeed
-		err := pkt.ReadPayload(&s)
-		if err != nil {
-			return err
-		}
-		return handleNewSeed(s.Seed, s.Time)
-	case P_ANNOUNCE:
-		var ann PacketAnnounce
-		err := pkt.ReadPayload(&ann)
-		if err != nil {
-			return err
-		}
-		return p.a.handleAnnounce(&ann, p)
-	case P_PONG:
-		var pong PacketPong
-		err := pkt.ReadPayload(&pong)
-		if err != nil {
-			return err
-		}
-		if pong.TargetId != p.a.id {
+	case *PacketSeed:
+		return handleNewSeed(pkt.Seed, pkt.Time)
+	case *PacketAnnounce:
+		return p.a.handleAnnounce(pkt, p)
+	case *PacketPong:
+		if pkt.TargetId != p.a.id {
 			// forward
-			return p.a.SendTo(pong.TargetId, pkt)
+			return p.a.SendTo(pkt.TargetId, pkt)
 		}
-		sp := p.a.GetPeer(pong.SourceId)
+		sp := p.a.GetPeer(pkt.SourceId)
 		if sp != nil {
-			sp.handlePong(&pong)
+			sp.handlePong(pkt)
 		}
 		return nil
 	default:
@@ -208,14 +193,10 @@ func (p *Peer) processAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 	p.annTime = ann.Now
 
 	// send response
-	pkt := &Packet{Type: P_PONG}
-	pkt.SetPayload(PacketPong{TargetId: ann.Id, SourceId: p.a.id, Now: ann.Now})
-	p.a.SendTo(ann.Id, pkt)
+	p.a.SendTo(ann.Id, &PacketPong{TargetId: ann.Id, SourceId: p.a.id, Now: ann.Now})
 
 	// broadcast
-	pkt = &Packet{Type: P_ANNOUNCE}
-	pkt.SetPayload(ann)
-	p.a.doBroadcast(pkt, fromPeer.id)
+	p.a.doBroadcast(ann, fromPeer.id)
 
 	return nil
 }
@@ -266,12 +247,12 @@ func (p *Peer) fetchUuidFromCertificate() error {
 	return nil
 }
 
-func (p *Peer) Send(pkt *Packet) error {
+func (p *Peer) Send(pkt interface{}) error {
 	// use mutex here to avoid multiple writes to overlap
 	p.write.Lock()
 	defer p.write.Unlock()
 
-	err := pkt.WriteStream(p.c)
+	err := p.enc.Encode(pkt)
 	if err != nil {
 		log.Printf("[fleet] Write to peer failed")
 		p.c.Close()
@@ -307,14 +288,13 @@ func (p *Peer) unregister() {
 }
 
 func (p *Peer) sendHandshake() error {
-	pkt := &Packet{Type: P_HANDSHAKE}
-	pkt.SetPayload(PacketHandshake{
+	pkt := &PacketHandshake{
 		Id:    p.a.id,
 		Name:  p.a.name,
 		Now:   time.Now(),
 		Git:   goupd.GIT_TAG,
 		Build: goupd.DATE_TAG,
-	})
+	}
 	err := p.Send(pkt)
 	if err != nil {
 		return err

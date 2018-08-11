@@ -1,5 +1,6 @@
 #!/bin/make
+GOPATH:=$(shell go env GOPATH)
 
 all:
-	goimports -w -l .
+	$(GOPATH)/bin/goimports -w -l .
 	go build -v

@@ -141,13 +141,11 @@ func SeedDecrypt(in []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-func seedPacket() *Packet {
-	pkt := &Packet{Type: P_SEED}
-	pkt.SetPayload(PacketSeed{
+func seedPacket() *PacketSeed {
+	return &PacketSeed{
 		Seed: seed.seed,
 		Time: seed.ts,
-	})
-	return pkt
+	}
 }
 
 func handleNewSeed(s []byte, t time.Time) error {
