@@ -62,6 +62,7 @@ func (a *AgentObj) doInit() (err error) {
 	a.peersMutex = new(sync.RWMutex)
 	a.services = make(map[string]chan net.Conn)
 	a.rpc = make(map[uintptr]chan *PacketRpcResponse)
+	a.rpcE = make(map[string]RpcEndpoint)
 
 	a.name = "local"
 
