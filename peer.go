@@ -176,6 +176,13 @@ func (p *Peer) handlePacket(pktI interface{}) error {
 			sp.handlePong(pkt)
 		}
 		return nil
+	case *PacketRpc:
+		if pkt.TargetId != p.a.id {
+			// fw
+			return p.a.SendTo(pkt.TargetId, pkt)
+		}
+		// we don't really care about the source, just do the rpc thing
+		return p.a.handleRpc(pkt)
 	default:
 		return errors.New("unsupported packet")
 	}

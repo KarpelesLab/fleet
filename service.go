@@ -18,6 +18,8 @@ type ServiceConn struct {
 	net.Conn
 }
 
+type RpcEndpoint func(interface{}) (interface{}, error)
+
 func (a *AgentObj) RoundTripper() http.RoundTripper {
 	return a.transport
 }

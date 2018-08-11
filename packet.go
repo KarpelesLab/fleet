@@ -12,6 +12,8 @@ func init() {
 	gob.Register(&PacketAnnounce{})
 	gob.Register(&PacketSeed{})
 	gob.Register(&PacketPong{})
+	gob.Register(&PacketRpc{})
+	gob.Register(&PacketRpcResponse{})
 }
 
 type Packet interface{}
@@ -42,4 +44,21 @@ type PacketPong struct {
 	TargetId uuid.UUID
 	SourceId uuid.UUID
 	Now      time.Time
+}
+
+type PacketRpc struct {
+	TargetId uuid.UUID
+	SourceId uuid.UUID
+	Endpoint string
+	R        uintptr
+	Data     interface{}
+}
+
+type PacketRpcResponse struct {
+	TargetId uuid.UUID
+	SourceId uuid.UUID
+	R        uintptr
+	Data     interface{}
+	Panic    interface{}
+	Error    error
 }

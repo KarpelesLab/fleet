@@ -15,6 +15,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/google/uuid"
 )
@@ -41,6 +42,10 @@ type AgentObj struct {
 
 	services  map[string]chan net.Conn
 	transport http.RoundTripper
+
+	rpc  map[uintptr]chan *PacketRpcResponse
+	rpcE map[string]RpcEndpoint
+	rpcL sync.RWMutex
 }
 
 func initAgent() {
@@ -56,6 +61,7 @@ func (a *AgentObj) doInit() (err error) {
 	a.peers = make(map[uuid.UUID]*Peer)
 	a.peersMutex = new(sync.RWMutex)
 	a.services = make(map[string]chan net.Conn)
+	a.rpc = make(map[uintptr]chan *PacketRpcResponse)
 
 	a.name = "local"
 
@@ -152,6 +158,67 @@ func (a *AgentObj) connectHosts() {
 
 		go a.dialPeer(h.Name+"."+a.self.Fleet.Hostname, h.Name, id)
 	}
+}
+
+func (a *AgentObj) RPC(id uuid.UUID, endpoint string, data interface{}) (interface{}, error) {
+	p := a.GetPeer(id)
+	if p == nil {
+		return nil, errors.New("Failed to find peer")
+	}
+
+	res := make(chan *PacketRpcResponse)
+	resId := uintptr(unsafe.Pointer(&res))
+	a.rpcL.Lock()
+	a.rpc[resId] = res
+	a.rpcL.Unlock()
+
+	// send request
+	pkt := PacketRpc{
+		TargetId: id,
+		SourceId: a.id,
+		R:        resId,
+		Endpoint: endpoint,
+		Data:     data,
+	}
+
+	p.Send(pkt)
+
+	// get response
+	r := <-res
+
+	a.rpcL.Lock()
+	delete(a.rpc, resId)
+	a.rpcL.Unlock()
+
+	if r == nil {
+		return nil, errors.New("failed to wait for response")
+	}
+
+	if r.Panic != nil {
+		panic(r.Panic)
+	}
+
+	return r.Data, r.Error
+}
+
+func (a *AgentObj) handleRpc(pkt *PacketRpc) error {
+	res := PacketRpcResponse{
+		SourceId: a.id,
+		TargetId: pkt.SourceId,
+		R:        pkt.R,
+	}
+
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				res.Panic = r
+			}
+		}()
+
+		res.Data, res.Error = a.rpcE[pkt.Endpoint](pkt.Data)
+	}()
+
+	return a.SendTo(res.TargetId, res)
 }
 
 func (a *AgentObj) dialPeer(host, name string, id uuid.UUID) {
