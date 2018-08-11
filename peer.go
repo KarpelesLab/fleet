@@ -254,7 +254,7 @@ func (p *Peer) Send(pkt Packet) error {
 
 	err := p.enc.Encode(&pkt)
 	if err != nil {
-		log.Printf("[fleet] Write to peer failed")
+		log.Printf("[fleet] Write to peer failed: %s", err)
 		p.c.Close()
 	}
 	return nil
