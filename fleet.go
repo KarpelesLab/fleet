@@ -248,6 +248,26 @@ func (a *AgentObj) handleRpc(pkt *PacketRpc) error {
 		R:        pkt.R,
 	}
 
+	if rpcE == nil {
+		if pkt.R != 0 {
+			res.Error = "RPC: endpoint system not enabled (no endpoints)"
+			res.HasError = true
+			return a.SendTo(res.TargetId, res)
+		}
+		return nil
+	}
+
+	cb := rpcE[pkt.Endpoint]
+
+	if cb == nil {
+		if pkt.R != 0 {
+			res.Error = "RPC: endpoint not found"
+			res.HasError = true
+			return a.SendTo(res.TargetId, res)
+		}
+		return nil
+	}
+
 	if pkt.R == 0 {
 		// no return
 		func() {
@@ -257,7 +277,7 @@ func (a *AgentObj) handleRpc(pkt *PacketRpc) error {
 				}
 			}()
 
-			a.rpcE[pkt.Endpoint](pkt.Data)
+			cb(pkt.Data)
 		}()
 		return nil
 	}
@@ -271,7 +291,7 @@ func (a *AgentObj) handleRpc(pkt *PacketRpc) error {
 		}()
 
 		var err error
-		res.Data, err = rpcE[pkt.Endpoint](pkt.Data)
+		res.Data, err = cb(pkt.Data)
 		if err != nil {
 			res.Error = err.Error()
 			res.HasError = true
