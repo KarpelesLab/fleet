@@ -165,6 +165,36 @@ func (a *AgentObj) SetEndpoint(e string, f RpcEndpoint) {
 	a.rpcE[e] = f
 }
 
+func (a *AgentObj) BroadcastRpc(endpoint string, data interface{}) error {
+	// send request
+	pkt := &PacketRpc{
+		SourceId: a.id,
+		Endpoint: endpoint,
+		Data:     data,
+	}
+
+	a.peersMutex.RLock()
+	defer a.peersMutex.RUnlock()
+
+	if len(a.peers) == 0 {
+		return nil
+	}
+
+	for _, p := range a.peers {
+		if p.id == a.id {
+			// do not send to self
+			continue
+		}
+		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
+		pkt2 := &PacketRpc{}
+		*pkt2 = *pkt
+		pkt2.TargetId = p.id
+		go p.Send(pkt2)
+	}
+
+	return nil
+}
+
 func (a *AgentObj) RPC(id uuid.UUID, endpoint string, data interface{}) (interface{}, error) {
 	p := a.GetPeer(id)
 	if p == nil {
@@ -178,7 +208,7 @@ func (a *AgentObj) RPC(id uuid.UUID, endpoint string, data interface{}) (interfa
 	a.rpcL.Unlock()
 
 	// send request
-	pkt := PacketRpc{
+	pkt := &PacketRpc{
 		TargetId: id,
 		SourceId: a.id,
 		R:        resId,
@@ -212,6 +242,20 @@ func (a *AgentObj) handleRpc(pkt *PacketRpc) error {
 		SourceId: a.id,
 		TargetId: pkt.SourceId,
 		R:        pkt.R,
+	}
+
+	if pkt.R == 0 {
+		// no return
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[fleet] Panic in RPC: %s", r)
+				}
+			}()
+
+			a.rpcE[pkt.Endpoint](pkt.Data)
+		}()
+		return nil
 	}
 
 	func() {
