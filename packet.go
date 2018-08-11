@@ -59,6 +59,6 @@ type PacketRpcResponse struct {
 	SourceId uuid.UUID
 	R        uintptr
 	Data     interface{}
-	Panic    interface{}
-	Error    error
+	Error    string
+	HasError bool
 }

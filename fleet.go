@@ -198,11 +198,12 @@ func (a *AgentObj) RPC(id uuid.UUID, endpoint string, data interface{}) (interfa
 		return nil, errors.New("failed to wait for response")
 	}
 
-	if r.Panic != nil {
-		panic(r.Panic)
+	err := error(nil)
+	if r.HasError {
+		err = errors.New(r.Error)
 	}
 
-	return r.Data, r.Error
+	return r.Data, err
 }
 
 func (a *AgentObj) handleRpc(pkt *PacketRpc) error {
@@ -215,11 +216,17 @@ func (a *AgentObj) handleRpc(pkt *PacketRpc) error {
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				res.Panic = r
+				res.Error = fmt.Sprintf("RPC Panic: %s", r)
+				res.HasError = true
 			}
 		}()
 
-		res.Data, res.Error = a.rpcE[pkt.Endpoint](pkt.Data)
+		var err error
+		res.Data, err = a.rpcE[pkt.Endpoint](pkt.Data)
+		if err != nil {
+			res.Error = err.Error()
+			res.HasError = true
+		}
 	}()
 
 	return a.SendTo(res.TargetId, res)
