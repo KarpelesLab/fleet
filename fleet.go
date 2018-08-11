@@ -162,7 +162,7 @@ func (a *AgentObj) connectHosts() {
 	}
 }
 
-func (a *AgentObj) SetEndpoint(e string, f RpcEndpoint) {
+func SetRpcEndpoint(e string, f RpcEndpoint) {
 	if rpcE == nil {
 		rpcE = make(map[string]RpcEndpoint)
 	}
