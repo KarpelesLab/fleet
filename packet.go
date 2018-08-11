@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func regPackets() {
+func init() {
 	gob.Register(&PacketHandshake{})
 	gob.Register(&PacketAnnounce{})
 	gob.Register(&PacketSeed{})
