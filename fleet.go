@@ -160,6 +160,10 @@ func (a *AgentObj) connectHosts() {
 	}
 }
 
+func (a *AgentObj) SetEndpoint(e string, f RpcEndpoint) {
+	a.rpcE[e] = f
+}
+
 func (a *AgentObj) RPC(id uuid.UUID, endpoint string, data interface{}) (interface{}, error) {
 	p := a.GetPeer(id)
 	if p == nil {
