@@ -109,7 +109,7 @@ func (p *Peer) retryLater(t time.Duration) {
 func (p *Peer) loop() {
 	// read from peer
 	dec := gob.NewDecoder(p.c)
-	var pkt interface{}
+	var pkt Packet
 
 	for {
 		err := dec.Decode(&pkt)
@@ -247,7 +247,7 @@ func (p *Peer) fetchUuidFromCertificate() error {
 	return nil
 }
 
-func (p *Peer) Send(pkt interface{}) error {
+func (p *Peer) Send(pkt Packet) error {
 	// use mutex here to avoid multiple writes to overlap
 	p.write.Lock()
 	defer p.write.Unlock()

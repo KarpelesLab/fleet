@@ -14,6 +14,8 @@ func regPackets() {
 	gob.Register(&PacketPong{})
 }
 
+type Packet interface{}
+
 type PacketHandshake struct {
 	Id   uuid.UUID
 	Name string

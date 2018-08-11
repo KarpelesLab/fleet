@@ -238,7 +238,7 @@ func (a *AgentObj) doAnnounce() {
 	}
 }
 
-func (a *AgentObj) doBroadcast(pkt interface{}, except_id uuid.UUID) {
+func (a *AgentObj) doBroadcast(pkt Packet, except_id uuid.UUID) {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
 
