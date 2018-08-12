@@ -29,6 +29,7 @@ type Peer struct {
 	write *sync.Mutex
 
 	annIdx  uint64
+	numG    int
 	cnx     time.Time
 	annTime time.Time
 	Ping    time.Duration
@@ -198,6 +199,7 @@ func (p *Peer) processAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 
 	p.annIdx = ann.Idx
 	p.annTime = ann.Now
+	p.numG = ann.NumG
 
 	// send response
 	p.a.SendTo(ann.Id, &PacketPong{TargetId: ann.Id, SourceId: p.a.id, Now: ann.Now})

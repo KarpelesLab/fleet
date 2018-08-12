@@ -28,11 +28,12 @@ type PacketHandshake struct {
 }
 
 type PacketAnnounce struct {
-	Id  uuid.UUID
-	Now time.Time
-	Idx uint64
-	Ip  string
-	AZ  string
+	Id   uuid.UUID
+	Now  time.Time
+	Idx  uint64
+	NumG int // number of goroutines
+	Ip   string
+	AZ   string
 }
 
 type PacketSeed struct {

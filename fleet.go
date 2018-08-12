@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -372,11 +373,12 @@ func (a *AgentObj) doAnnounce() {
 	x := atomic.AddUint64(&a.announceIdx, 1)
 
 	pkt := &PacketAnnounce{
-		Id:  a.id,
-		Now: time.Now(),
-		Idx: x,
-		Ip:  a.self.Ip,
-		AZ:  a.self.AZ,
+		Id:   a.id,
+		Now:  time.Now(),
+		Idx:  x,
+		Ip:   a.self.Ip,
+		AZ:   a.self.AZ,
+		NumG: runtime.NumGoroutine(),
 	}
 
 	for _, p := range a.peers {
@@ -418,6 +420,7 @@ func (a *AgentObj) DumpInfo(w io.Writer) {
 		fmt.Fprintf(w, "Connected:%s (%s ago)\n", p.cnx, time.Since(p.cnx))
 		fmt.Fprintf(w, "Last Ann: %s\n", time.Since(p.annTime))
 		fmt.Fprintf(w, "Latency:  %s\n", p.Ping)
+		fmt.Fprintf(w, "Routines: %d\n", p.numG)
 		fmt.Fprintf(w, "\n")
 	}
 }
