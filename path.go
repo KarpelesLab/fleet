@@ -22,12 +22,11 @@ func initPath() {
 		} else if err != nil {
 			log.Printf("failed to access cache: %s", err)
 			return
-		}
-		if !inf.IsDir() {
+		} else if err == nil && !inf.IsDir() {
 			log.Printf("error: cache is not a directory")
 			return
 		}
-		log.Printf("set cache dir: %s", c)
+		log.Printf("[fleet] set cache dir: %s", c)
 		os.Chdir(c)
 	}
 }
