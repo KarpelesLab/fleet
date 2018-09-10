@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -69,7 +70,7 @@ func (a *AgentObj) doInit() (err error) {
 	a.name = "local"
 
 	// load fleet info
-	fleet_info, err := ioutil.ReadFile("fleet.json")
+	fleet_info, err := ioutil.ReadFile(filepath.Join(initialPath, "fleet.json"))
 	if err != nil {
 		return
 	}

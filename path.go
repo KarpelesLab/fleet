@@ -9,7 +9,10 @@ import (
 	"github.com/TrisTech/goupd"
 )
 
+var initialPath string
+
 func initPath() {
+	initialPath, _ = os.Getwd()
 	if goupd.PROJECT_NAME != "unconfigured" {
 		// chdir to cache
 		c := GetCacheDir()
