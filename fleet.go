@@ -86,13 +86,13 @@ func (a *AgentObj) doInit() (err error) {
 	}
 	a.name = a.self.Name
 
-	a.cert, err = tls.LoadX509KeyPair("internal_key.pem", "internal_key.key")
+	a.cert, err = tls.LoadX509KeyPair(filepath.Join(initialPath, "internal_key.pem"), filepath.Join(initialPath, "internal_key.key"))
 	if err != nil {
 		return
 	}
 
 	// load CA
-	ca_data, err := ioutil.ReadFile("internal_ca.pem")
+	ca_data, err := ioutil.ReadFile(filepath.Join(initialPath, "internal_ca.pem"))
 	if err != nil {
 		return
 	}
