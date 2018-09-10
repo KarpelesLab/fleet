@@ -12,7 +12,7 @@ import (
 var initialPath string
 
 func initPath() {
-	initialPath, _ = os.Getwd()
+	getInitialPath()
 	if goupd.PROJECT_NAME != "unconfigured" {
 		// chdir to cache
 		c := GetCacheDir()
@@ -23,6 +23,23 @@ func initPath() {
 		log.Printf("[fleet] set cache dir: %s", c)
 		os.Chdir(c)
 	}
+}
+
+func getInitialPath() {
+	initialPath, _ = os.Getwd()
+	exe, err := os.Executable()
+	if err != nil {
+		log.Printf("[fleet] failed to get executable path: %s", err)
+		return
+	}
+	exe, err = filepath.EvalSymlinks(exe)
+	if err != nil {
+		log.Printf("[fleet] failed to parse executable path: %s", err)
+		return
+	}
+
+	// get directory
+	initialPath = filepath.Dir(exe)
 }
 
 func GetCacheDir() string {
