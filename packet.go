@@ -3,8 +3,6 @@ package fleet
 import (
 	"encoding/gob"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 func init() {
@@ -19,7 +17,7 @@ func init() {
 type Packet interface{}
 
 type PacketHandshake struct {
-	Id   uuid.UUID
+	Id   string
 	Name string
 	Now  time.Time
 
@@ -28,7 +26,7 @@ type PacketHandshake struct {
 }
 
 type PacketAnnounce struct {
-	Id  uuid.UUID
+	Id  string
 	Now time.Time
 	Idx uint64
 	Ip  string
@@ -41,22 +39,22 @@ type PacketSeed struct {
 }
 
 type PacketPong struct {
-	TargetId uuid.UUID
-	SourceId uuid.UUID
+	TargetId string
+	SourceId string
 	Now      time.Time
 }
 
 type PacketRpc struct {
-	TargetId uuid.UUID
-	SourceId uuid.UUID
+	TargetId string
+	SourceId string
 	Endpoint string
 	R        uintptr
 	Data     interface{}
 }
 
 type PacketRpcResponse struct {
-	TargetId uuid.UUID
-	SourceId uuid.UUID
+	TargetId string
+	SourceId string
 	R        uintptr
 	Data     interface{}
 	Error    string

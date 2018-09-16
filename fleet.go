@@ -16,8 +16,6 @@ import (
 	"sync/atomic"
 	"time"
 	"unsafe"
-
-	"github.com/google/uuid"
 )
 
 var (
@@ -28,7 +26,7 @@ var (
 type AgentObj struct {
 	socket net.Listener
 
-	id   uuid.UUID
+	id   string
 	name string
 
 	inCfg  *tls.Config
@@ -38,7 +36,7 @@ type AgentObj struct {
 
 	announceIdx uint64
 
-	peers      map[uuid.UUID]*Peer
+	peers      map[string]*Peer
 	peersMutex *sync.RWMutex
 
 	self JsonFleetHostInfo
@@ -60,7 +58,7 @@ func initAgent() {
 }
 
 func (a *AgentObj) doInit() (err error) {
-	a.peers = make(map[uuid.UUID]*Peer)
+	a.peers = make(map[string]*Peer)
 	a.peersMutex = new(sync.RWMutex)
 	a.services = make(map[string]chan net.Conn)
 	a.rpc = make(map[uintptr]chan *PacketRpcResponse)
@@ -78,10 +76,7 @@ func (a *AgentObj) doInit() (err error) {
 		return
 	}
 
-	a.id, err = uuid.Parse(a.self.Id)
-	if err != nil {
-		return
-	}
+	a.id = a.self.Id
 	a.name = a.self.Name
 
 	a.cert, err = tls.LoadX509KeyPair("internal_key.pem", "internal_key.key")
@@ -136,7 +131,7 @@ func (a *AgentObj) doInit() (err error) {
 	return
 }
 
-func (a *AgentObj) Id() uuid.UUID {
+func (a *AgentObj) Id() string {
 	return a.id
 }
 
@@ -145,20 +140,15 @@ func (a *AgentObj) connectHosts() {
 	defer a.peersMutex.RUnlock()
 
 	for _, h := range a.self.Hosts {
-		id, err := uuid.Parse(h.Id)
-		if err != nil {
-			log.Printf("[fleet] failed to parse uuid for host")
-			continue
-		}
-		if id == a.id {
+		if h.Id == a.id {
 			continue
 		}
 		// check if already connected
-		if _, ok := a.peers[id]; ok {
+		if _, ok := a.peers[h.Id]; ok {
 			continue
 		}
 
-		go a.dialPeer(h.Name+"."+a.self.Fleet.Hostname, h.Name, id)
+		go a.dialPeer(h.Name+"."+a.self.Fleet.Hostname, h.Name, h.Id)
 	}
 }
 
@@ -169,7 +159,7 @@ func SetRpcEndpoint(e string, f RpcEndpoint) {
 	rpcE[e] = f
 }
 
-func (a *AgentObj) RPC(id uuid.UUID, endpoint string, data interface{}) (interface{}, error) {
+func (a *AgentObj) RPC(id string, endpoint string, data interface{}) (interface{}, error) {
 	p := a.GetPeer(id)
 	if p == nil {
 		return nil, errors.New("Failed to find peer")
@@ -237,7 +227,7 @@ func (a *AgentObj) handleRpc(pkt *PacketRpc) error {
 	return a.SendTo(res.TargetId, res)
 }
 
-func (a *AgentObj) dialPeer(host, name string, id uuid.UUID) {
+func (a *AgentObj) dialPeer(host, name string, id string) {
 	if id == a.id {
 		// avoid connect to self
 		return
@@ -252,7 +242,7 @@ func (a *AgentObj) dialPeer(host, name string, id uuid.UUID) {
 	}
 
 	cfg := a.outCfg.Clone()
-	cfg.ServerName = id.String()
+	cfg.ServerName = id
 	cfg.NextProtos = []string{"fleet"}
 
 	c, err := tls.Dial("tcp", host+":61337", cfg)
@@ -264,7 +254,7 @@ func (a *AgentObj) dialPeer(host, name string, id uuid.UUID) {
 	a.newConn(c)
 }
 
-func (a *AgentObj) IsConnected(id uuid.UUID) bool {
+func (a *AgentObj) IsConnected(id string) bool {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
 	_, ok := a.peers[id]
@@ -321,7 +311,7 @@ func (a *AgentObj) doAnnounce() {
 	}
 }
 
-func (a *AgentObj) doBroadcast(pkt Packet, except_id uuid.UUID) {
+func (a *AgentObj) doBroadcast(pkt Packet, except_id string) {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
 
@@ -358,7 +348,7 @@ func (a *AgentObj) DumpInfo(w io.Writer) {
 	}
 }
 
-func (a *AgentObj) GetPeer(id uuid.UUID) *Peer {
+func (a *AgentObj) GetPeer(id string) *Peer {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
 	return a.peers[id]
@@ -389,7 +379,7 @@ func (a *AgentObj) handleAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 	return p.processAnnounce(ann, fromPeer)
 }
 
-func (a *AgentObj) SendTo(target uuid.UUID, pkt interface{}) error {
+func (a *AgentObj) SendTo(target string, pkt interface{}) error {
 	p := a.GetPeer(target) // TODO find best route instead of using GetPeer
 	if p == nil {
 		return errors.New("no route to peer")

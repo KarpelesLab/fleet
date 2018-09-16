@@ -4,9 +4,7 @@ import (
 	"crypto/tls"
 	"encoding/asn1"
 	"encoding/gob"
-	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -14,13 +12,12 @@ import (
 	"time"
 
 	"github.com/TrisTech/goupd"
-	"github.com/google/uuid"
 )
 
 type Peer struct {
 	c         *tls.Conn
 	outStream [][]byte
-	id        uuid.UUID
+	id        string
 	name      string
 	addr      *net.TCPAddr
 	valid     bool
@@ -241,16 +238,7 @@ func (p *Peer) fetchUuidFromCertificate() error {
 		return errors.New("failed to get peer id from cert")
 	}
 
-	peer_id_b, err := hex.DecodeString(peer_id)
-	if err != nil {
-		return fmt.Errorf("failed to decode peer id: %s", err)
-	}
-
-	err = p.id.UnmarshalBinary(peer_id_b)
-	if err != nil {
-		return fmt.Errorf("failed to decode peer id: %s", err)
-	}
-
+	p.id = peer_id
 	return nil
 }
 

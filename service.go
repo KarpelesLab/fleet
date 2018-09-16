@@ -4,13 +4,12 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"strings"
-
-	"github.com/google/uuid"
 )
 
 // embed connection in a separate object to avoid confusing go's HTTP server (among other stuff)
@@ -40,13 +39,13 @@ func (a *AgentObj) Dial(network, addr string) (net.Conn, error) {
 		return nil, errors.New("could not parse host")
 	}
 
-	id, err := uuid.Parse(addrSplit[1])
-	if err != nil {
+	id := addrSplit[1]
+	if _, ok := a.peers[id]; !ok {
 		p := a.GetPeerByName(addrSplit[1])
 		if p != nil {
 			id = p.id
 		} else {
-			return nil, err
+			return nil, fmt.Errorf("peer not found: %s", addrSplit[1])
 		}
 	}
 
@@ -54,7 +53,7 @@ func (a *AgentObj) Dial(network, addr string) (net.Conn, error) {
 }
 
 // connect to given peer under specified protocol (if supported)
-func (a *AgentObj) Connect(id uuid.UUID, service string) (net.Conn, error) {
+func (a *AgentObj) Connect(id string, service string) (net.Conn, error) {
 	p := a.GetPeer(id)
 	if p == nil {
 		return nil, errors.New("no route to peer")
@@ -66,7 +65,7 @@ func (a *AgentObj) Connect(id uuid.UUID, service string) (net.Conn, error) {
 	}
 
 	cfg := a.outCfg.Clone()
-	cfg.ServerName = id.String()
+	cfg.ServerName = id
 	cfg.NextProtos = []string{"p2p"}
 
 	c, err := tls.Dial("tcp", p.addr.IP.String()+":61337", cfg)
