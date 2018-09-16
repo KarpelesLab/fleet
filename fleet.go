@@ -12,6 +12,8 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"path/filepath"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -66,7 +68,7 @@ func (a *AgentObj) doInit() (err error) {
 	a.name = "local"
 
 	// load fleet info
-	fleet_info, err := ioutil.ReadFile("fleet.json")
+	fleet_info, err := ioutil.ReadFile(filepath.Join(initialPath, "fleet.json"))
 	if err != nil {
 		return
 	}
@@ -79,13 +81,13 @@ func (a *AgentObj) doInit() (err error) {
 	a.id = a.self.Id
 	a.name = a.self.Name
 
-	a.cert, err = tls.LoadX509KeyPair("internal_key.pem", "internal_key.key")
+	a.cert, err = tls.LoadX509KeyPair(filepath.Join(initialPath, "internal_key.pem"), filepath.Join(initialPath, "internal_key.key"))
 	if err != nil {
 		return
 	}
 
 	// load CA
-	ca_data, err := ioutil.ReadFile("internal_ca.pem")
+	ca_data, err := ioutil.ReadFile(filepath.Join(initialPath, "internal_ca.pem"))
 	if err != nil {
 		return
 	}
@@ -159,6 +161,36 @@ func SetRpcEndpoint(e string, f RpcEndpoint) {
 	rpcE[e] = f
 }
 
+func (a *AgentObj) BroadcastRpc(endpoint string, data interface{}) error {
+	// send request
+	pkt := &PacketRpc{
+		SourceId: a.id,
+		Endpoint: endpoint,
+		Data:     data,
+	}
+
+	a.peersMutex.RLock()
+	defer a.peersMutex.RUnlock()
+
+	if len(a.peers) == 0 {
+		return nil
+	}
+
+	for _, p := range a.peers {
+		if p.id == a.id {
+			// do not send to self
+			continue
+		}
+		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
+		pkt2 := &PacketRpc{}
+		*pkt2 = *pkt
+		pkt2.TargetId = p.id
+		go p.Send(pkt2)
+	}
+
+	return nil
+}
+
 func (a *AgentObj) RPC(id string, endpoint string, data interface{}) (interface{}, error) {
 	p := a.GetPeer(id)
 	if p == nil {
@@ -172,7 +204,7 @@ func (a *AgentObj) RPC(id string, endpoint string, data interface{}) (interface{
 	a.rpcL.Unlock()
 
 	// send request
-	pkt := PacketRpc{
+	pkt := &PacketRpc{
 		TargetId: id,
 		SourceId: a.id,
 		R:        resId,
@@ -208,6 +240,40 @@ func (a *AgentObj) handleRpc(pkt *PacketRpc) error {
 		R:        pkt.R,
 	}
 
+	if rpcE == nil {
+		if pkt.R != 0 {
+			res.Error = "RPC: endpoint system not enabled (no endpoints)"
+			res.HasError = true
+			return a.SendTo(res.TargetId, res)
+		}
+		return nil
+	}
+
+	cb := rpcE[pkt.Endpoint]
+
+	if cb == nil {
+		if pkt.R != 0 {
+			res.Error = "RPC: endpoint not found"
+			res.HasError = true
+			return a.SendTo(res.TargetId, res)
+		}
+		return nil
+	}
+
+	if pkt.R == 0 {
+		// no return
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[fleet] Panic in RPC: %s", r)
+				}
+			}()
+
+			cb(pkt.Data)
+		}()
+		return nil
+	}
+
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -217,7 +283,7 @@ func (a *AgentObj) handleRpc(pkt *PacketRpc) error {
 		}()
 
 		var err error
-		res.Data, err = rpcE[pkt.Endpoint](pkt.Data)
+		res.Data, err = cb(pkt.Data)
 		if err != nil {
 			res.Error = err.Error()
 			res.HasError = true
@@ -298,11 +364,12 @@ func (a *AgentObj) doAnnounce() {
 	x := atomic.AddUint64(&a.announceIdx, 1)
 
 	pkt := &PacketAnnounce{
-		Id:  a.id,
-		Now: time.Now(),
-		Idx: x,
-		Ip:  a.self.Ip,
-		AZ:  a.self.AZ,
+		Id:   a.id,
+		Now:  time.Now(),
+		Idx:  x,
+		Ip:   a.self.Ip,
+		AZ:   a.self.AZ,
+		NumG: runtime.NumGoroutine(),
 	}
 
 	for _, p := range a.peers {
@@ -344,6 +411,7 @@ func (a *AgentObj) DumpInfo(w io.Writer) {
 		fmt.Fprintf(w, "Connected:%s (%s ago)\n", p.cnx, time.Since(p.cnx))
 		fmt.Fprintf(w, "Last Ann: %s\n", time.Since(p.annTime))
 		fmt.Fprintf(w, "Latency:  %s\n", p.Ping)
+		fmt.Fprintf(w, "Routines: %d\n", p.numG)
 		fmt.Fprintf(w, "\n")
 	}
 }
