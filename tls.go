@@ -15,6 +15,7 @@ func GetTlsConfig() (*tls.Config, error) {
 		if err == nil {
 			cfg := new(tls.Config)
 			cfg.Certificates = []tls.Certificate{cert}
+			SeedTlsConfig(cfg)
 			return cfg, nil
 		}
 	}
@@ -24,6 +25,7 @@ func GetTlsConfig() (*tls.Config, error) {
 		if err == nil {
 			cfg := new(tls.Config)
 			cfg.Certificates = []tls.Certificate{cert}
+			SeedTlsConfig(cfg)
 			return cfg, nil
 		}
 	}

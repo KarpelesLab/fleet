@@ -6,6 +6,7 @@ import (
 	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/rand"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -94,6 +95,10 @@ func (s *seedData) WriteToDisk() error {
 	os.Rename("fleet_seed.bin~", "fleet_seed.bin")
 
 	return nil
+}
+
+func SeedTlsConfig(c *tls.Config) {
+	copy(c.SessionTicketKey[:], seed.seed[32:64])
 }
 
 func SeedSign(in []byte) []byte {
