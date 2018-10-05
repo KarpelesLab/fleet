@@ -19,6 +19,7 @@ type Peer struct {
 	outStream [][]byte
 	id        string
 	name      string
+	division  string
 	addr      *net.TCPAddr
 	valid     bool
 	enc       *gob.Encoder
@@ -157,6 +158,7 @@ func (p *Peer) handlePacket(pktI interface{}) error {
 			return errors.New("invalid handshake")
 		}
 		p.name = pkt.Name
+		p.division = pkt.Division
 		goupd.SignalVersion(pkt.Git, pkt.Build)
 		// TODO calculate offset
 		return nil
@@ -286,11 +288,12 @@ func (p *Peer) unregister() {
 
 func (p *Peer) sendHandshake() error {
 	pkt := &PacketHandshake{
-		Id:    p.a.id,
-		Name:  p.a.name,
-		Now:   time.Now(),
-		Git:   goupd.GIT_TAG,
-		Build: goupd.DATE_TAG,
+		Id:       p.a.id,
+		Name:     p.a.name,
+		Division: p.a.division,
+		Now:      time.Now(),
+		Git:      goupd.GIT_TAG,
+		Build:    goupd.DATE_TAG,
 	}
 	err := p.Send(pkt)
 	if err != nil {

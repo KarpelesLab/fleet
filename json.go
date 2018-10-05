@@ -1,10 +1,11 @@
 package fleet
 
 type JsonCloudFleet struct {
-	Id       string `json:"Cloud_Fleet__"`
-	Name     string
-	Project  string
-	Hostname string
+	Id         string `json:"Cloud_Fleet__"`
+	DivisionId string `json:"Cloud_Fleet_Division__"`
+	Name       string
+	Project    string
+	Hostname   string
 }
 
 type JsonFleetHostInfo struct {

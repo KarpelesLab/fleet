@@ -28,8 +28,9 @@ var (
 type AgentObj struct {
 	socket net.Listener
 
-	id   string
-	name string
+	id       string
+	name     string
+	division string
 
 	inCfg  *tls.Config
 	outCfg *tls.Config
@@ -80,6 +81,7 @@ func (a *AgentObj) doInit() (err error) {
 
 	a.id = a.self.Id
 	a.name = a.self.Name
+	a.division = a.self.DivisionId
 
 	a.cert, err = tls.LoadX509KeyPair(filepath.Join(initialPath, "internal_key.pem"), filepath.Join(initialPath, "internal_key.key"))
 	if err != nil {
@@ -179,6 +181,39 @@ func (a *AgentObj) BroadcastRpc(endpoint string, data interface{}) error {
 	for _, p := range a.peers {
 		if p.id == a.id {
 			// do not send to self
+			continue
+		}
+		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
+		pkt2 := &PacketRpc{}
+		*pkt2 = *pkt
+		pkt2.TargetId = p.id
+		go p.Send(pkt2)
+	}
+
+	return nil
+}
+
+func (a *AgentObj) DivisionRpc(division string, endpoint string, data interface{}) error {
+	// send request
+	pkt := &PacketRpc{
+		SourceId: a.id,
+		Endpoint: endpoint,
+		Data:     data,
+	}
+
+	a.peersMutex.RLock()
+	defer a.peersMutex.RUnlock()
+
+	if len(a.peers) == 0 {
+		return nil
+	}
+
+	for _, p := range a.peers {
+		if p.id == a.id {
+			// do not send to self
+			continue
+		}
+		if p.division != division {
 			continue
 		}
 		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
@@ -399,6 +434,7 @@ func (a *AgentObj) DumpInfo(w io.Writer) {
 	fmt.Fprintf(w, "Fleet Agent Information\n")
 	fmt.Fprintf(w, "=======================\n\n")
 	fmt.Fprintf(w, "Local name: %s\n", a.name)
+	fmt.Fprintf(w, "Division:   %s\n", a.division)
 	fmt.Fprintf(w, "Local ID:   %s\n", a.id)
 	fmt.Fprintf(w, "Seed ID:    %s (seed stamp: %s)\n", SeedId(), seed.ts)
 	fmt.Fprintf(w, "\n")
@@ -407,6 +443,7 @@ func (a *AgentObj) DumpInfo(w io.Writer) {
 	defer a.peersMutex.RUnlock()
 	for _, p := range a.peers {
 		fmt.Fprintf(w, "Peer:     %s (%s)\n", p.name, p.id)
+		fmt.Fprintf(w, "Division: %s\n", p.division)
 		fmt.Fprintf(w, "Endpoint: %s\n", p.c.RemoteAddr())
 		fmt.Fprintf(w, "Connected:%s (%s ago)\n", p.cnx, time.Since(p.cnx))
 		fmt.Fprintf(w, "Last Ann: %s\n", time.Since(p.annTime))

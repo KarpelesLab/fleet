@@ -17,9 +17,10 @@ func init() {
 type Packet interface{}
 
 type PacketHandshake struct {
-	Id   string
-	Name string
-	Now  time.Time
+	Id       string
+	Name     string
+	Division string
+	Now      time.Time
 
 	Git   string
 	Build string
