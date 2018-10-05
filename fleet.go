@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -191,6 +192,51 @@ func (a *AgentObj) BroadcastRpc(endpoint string, data interface{}) error {
 	}
 
 	return nil
+}
+
+type rpcChoiceStruct struct {
+	routines int
+	peer     *Peer
+}
+
+func (a *AgentObj) AnyRpc(division string, endpoint string, data interface{}) error {
+	// send request
+	pkt := &PacketRpc{
+		SourceId: a.id,
+		Endpoint: endpoint,
+		Data:     data,
+	}
+
+	a.peersMutex.RLock()
+	defer a.peersMutex.RUnlock()
+
+	if len(a.peers) == 0 {
+		return errors.New("no peer available")
+	}
+
+	var choices []rpcChoiceStruct
+
+	for _, p := range a.peers {
+		if p.id == a.id {
+			// do not send to self
+			continue
+		}
+		if division != "" && p.division != division {
+			continue
+		}
+		choices = append(choices, rpcChoiceStruct{routines: p.numG, peer: p})
+	}
+
+	sort.SliceStable(choices, func(i, j int) bool { return choices[i].routines < choices[j].routines })
+
+	for _, i := range choices {
+		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
+		pkt.TargetId = i.peer.id
+		go i.peer.Send(pkt)
+		return nil
+	}
+
+	return errors.New("no peer available")
 }
 
 func (a *AgentObj) DivisionRpc(division string, endpoint string, data interface{}) error {
