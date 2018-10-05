@@ -195,7 +195,7 @@ func (a *AgentObj) BroadcastRpc(endpoint string, data interface{}) error {
 }
 
 type rpcChoiceStruct struct {
-	routines int
+	routines uint32
 	peer     *Peer
 }
 
@@ -232,6 +232,7 @@ func (a *AgentObj) AnyRpc(division string, endpoint string, data interface{}) er
 	for _, i := range choices {
 		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
 		pkt.TargetId = i.peer.id
+		atomic.AddUint32(&i.peer.numG, 1) // increment value to avoid sending bursts to the same node
 		go i.peer.Send(pkt)
 		return nil
 	}
@@ -450,7 +451,7 @@ func (a *AgentObj) doAnnounce() {
 		Idx:  x,
 		Ip:   a.self.Ip,
 		AZ:   a.self.AZ,
-		NumG: runtime.NumGoroutine(),
+		NumG: uint32(runtime.NumGoroutine()),
 	}
 
 	for _, p := range a.peers {
