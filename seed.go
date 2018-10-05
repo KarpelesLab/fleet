@@ -7,6 +7,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -136,6 +137,11 @@ func SeedDecrypt(in []byte) ([]byte, error) {
 	aesgcm, err := cipher.NewGCM(block)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(in) <= aesgcm.NonceSize() {
+		// not enough data
+		return nil, errors.New("decrypt: not enough data to decrypt input")
 	}
 
 	plaintext, err := aesgcm.Open(nil, in[:aesgcm.NonceSize()], in[aesgcm.NonceSize():], nil)
