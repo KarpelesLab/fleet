@@ -67,6 +67,7 @@ func (a *AgentObj) doInit() (err error) {
 	a.services = make(map[string]chan net.Conn)
 	a.rpc = make(map[uintptr]chan *PacketRpcResponse)
 
+	a.id = "local"
 	a.name = "local"
 
 	// load fleet info
@@ -138,6 +139,14 @@ func (a *AgentObj) doInit() (err error) {
 
 func (a *AgentObj) Id() string {
 	return a.id
+}
+
+func (a *AgentObj) Name() (string, string) {
+	if a.self.Fleet == nil {
+		return a.self.Name, ""
+	} else {
+		return a.self.Name, a.self.Fleet.Hostname
+	}
 }
 
 func (a *AgentObj) connectHosts() {
