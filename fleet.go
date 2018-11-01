@@ -41,11 +41,12 @@ type AgentObj struct {
 	announceIdx uint64
 
 	peers      map[string]*Peer
-	peersMutex *sync.RWMutex
+	peersMutex sync.RWMutex
 
 	self JsonFleetHostInfo
 
 	services  map[string]chan net.Conn
+	svcMutex  sync.RWMutex
 	transport http.RoundTripper
 
 	rpc  map[uintptr]chan *PacketRpcResponse
@@ -63,7 +64,6 @@ func initAgent() {
 
 func (a *AgentObj) doInit() (err error) {
 	a.peers = make(map[string]*Peer)
-	a.peersMutex = new(sync.RWMutex)
 	a.services = make(map[string]chan net.Conn)
 	a.rpc = make(map[uintptr]chan *PacketRpcResponse)
 

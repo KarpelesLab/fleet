@@ -108,6 +108,9 @@ func (a *AgentObj) Connect(id string, service string) (net.Conn, error) {
 }
 
 func (a *AgentObj) AddService(service string) chan net.Conn {
+	a.svcMutex.Lock()
+	defer a.svcMutex.Unlock()
+
 	a.services[service] = make(chan net.Conn)
 
 	return a.services[service]
@@ -142,6 +145,9 @@ func (a *AgentObj) handleServiceConn(tc *tls.Conn) {
 }
 
 func (a *AgentObj) forwardConnection(service string, c net.Conn) {
+	a.svcMutex.RLock()
+	defer a.svcMutex.RUnlock()
+
 	ch, ok := a.services[service]
 	if !ok {
 		err := []byte("no such service")
