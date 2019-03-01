@@ -36,6 +36,6 @@ func LogDmesg(w io.Writer) (int64, error) {
 	return io.Copy(w, r)
 }
 
-func Shutdown() {
+func shutdownLog() {
 	logbuf.Close()
 }

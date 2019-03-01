@@ -7,3 +7,8 @@ func init() {
 	initSeed()
 	initAgent()
 }
+
+func Shutdown() {
+	shutdownDb()
+	shutdownLog()
+}
