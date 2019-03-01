@@ -1,6 +1,7 @@
 package fleet
 
 import (
+	"bytes"
 	"path/filepath"
 
 	"github.com/boltdb/bolt"
@@ -85,7 +86,16 @@ func feedDbSet(bucket, key, val []byte, v DbStamp) error {
 		if err != nil {
 			return err
 		}
-		err = vl.Put(append(vBin, fk...), vBin)
+		// remove old entries from vlog
+		c := vl.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			if bytes.Equal(v, fk) {
+				vl.Delete(k) // this delete has no reason to fail, and even if it does it's not really an issue
+			}
+		}
+
+		// add to vlog
+		err = vl.Put(append(vBin, fk...), fk)
 		if err != nil {
 			return err
 		}
