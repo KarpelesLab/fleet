@@ -203,6 +203,37 @@ func (a *AgentObj) BroadcastRpc(endpoint string, data interface{}) error {
 	return nil
 }
 
+func (a *AgentObj) broadcastDbRecord(bucket, key, val []byte, v DbStamp) error {
+	pkt := &PacketDbRecord{
+		SourceId: a.id,
+		Stamp:    v,
+		Bucket:   bucket,
+		Key:      key,
+		Val:      val,
+	}
+
+	a.peersMutex.RLock()
+	defer a.peersMutex.RUnlock()
+
+	if len(a.peers) == 0 {
+		return nil
+	}
+
+	for _, p := range a.peers {
+		if p.id == a.id {
+			// do not send to self
+			continue
+		}
+		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
+		pkt2 := &PacketDbRecord{}
+		*pkt2 = *pkt
+		pkt2.TargetId = p.id
+		go p.Send(pkt2)
+	}
+
+	return nil
+}
+
 type rpcChoiceStruct struct {
 	routines uint32
 	peer     *Peer

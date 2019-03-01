@@ -57,3 +57,15 @@ func (t *DbStamp) UnmarshalBinary(data []byte) error {
 	*t = DbStamp(time.Unix(ut, un))
 	return nil
 }
+
+func (t DbStamp) After(t2 DbStamp) bool {
+	return time.Time(t).After(time.Time(t2))
+}
+
+func (t DbStamp) GobEncode() ([]byte, error) {
+	return time.Time(t).GobEncode()
+}
+
+func (t *DbStamp) GobDecode(data []byte) error {
+	return (*time.Time)(t).GobDecode(data)
+}

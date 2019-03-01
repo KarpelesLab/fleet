@@ -184,6 +184,13 @@ func (p *Peer) handlePacket(pktI interface{}) error {
 		}
 		// we don't really care about the source, just do the rpc thing
 		return p.a.handleRpc(pkt)
+	case *PacketDbRecord:
+		if pkt.TargetId != p.a.id {
+			// fw
+			return p.a.SendTo(pkt.TargetId, pkt)
+		}
+		// let the db handle that
+		return feedDbSet(pkt.Bucket, pkt.Key, pkt.Val, pkt.Stamp)
 	default:
 		return errors.New("unsupported packet")
 	}

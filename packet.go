@@ -12,6 +12,8 @@ func init() {
 	gob.Register(&PacketPong{})
 	gob.Register(&PacketRpc{})
 	gob.Register(&PacketRpcResponse{})
+	gob.Register(&PacketDbRecord{})
+	gob.Register(DbStamp{})
 }
 
 type Packet interface{}
@@ -61,4 +63,12 @@ type PacketRpcResponse struct {
 	Data     interface{}
 	Error    string
 	HasError bool
+}
+
+type PacketDbRecord struct {
+	TargetId string
+	SourceId string
+	Stamp    DbStamp
+	Bucket   []byte // typically "app"
+	Key, Val []byte
 }

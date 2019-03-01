@@ -31,8 +31,59 @@ func DbGet(key string) (string, error) {
 
 // simple db set for program usage
 func DbSet(key string, value []byte) error {
-	// TODO: generate key version, push to other peers
-	return dbSimpleSet([]byte("app"), []byte(key), value)
+	v := DbNow()
+
+	if err := feedDbSet([]byte("app"), []byte(key), value, v); err != nil {
+		return err
+	}
+
+	// broadcast
+	Agent.broadcastDbRecord([]byte("app"), []byte(key), value, v)
+	return nil
+}
+
+func feedDbSet(bucket, key, val []byte, v DbStamp) error {
+	// compute global key (bucket + NUL + key)
+	fk := append(append(bucket, 0), key...)
+	// check version
+	curV, err := dbSimpleGet([]byte("version"), fk)
+	if err != nil {
+		return err
+	}
+	// decode curV
+	if len(curV) > 0 {
+		var curVT DbStamp
+		err = curVT.UnmarshalBinary(curV)
+		if err != nil {
+			return err
+		}
+		// compare with v
+		if !v.After(curVT) {
+			// no need for update, we already have the latest version
+			return nil
+		}
+	}
+
+	// update
+	return db.Update(func(tx *bolt.Tx) error {
+		vb, err := tx.CreateBucketIfNotExists([]byte("version"))
+		if err != nil {
+			return err
+		}
+		b, err := tx.CreateBucketIfNotExists(bucket)
+		if err != nil {
+			return err
+		}
+
+		vBin, _ := v.MarshalBinary()
+
+		err = vb.Put(fk, vBin)
+		if err != nil {
+			return err
+		}
+
+		return b.Put(key, val)
+	})
 }
 
 // internal setter
