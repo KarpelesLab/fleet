@@ -45,8 +45,21 @@ func makeSeed(s []byte, t time.Time) *seedData {
 }
 
 func initSeed() {
+	// check for seed in db (seed is actually shared, but update rule is different from regular record so we use fleet)
+	if d, err := dbSimpleGet([]byte("fleet"), []byte("seed")); d != nil && err == nil && len(d) > 128 {
+		// found seed data in db
+		t := time.Time{}
+		if t.UnmarshalBinary(d[128:]) == nil {
+			// managed to read time too!
+			seed = makeSeed(d[:128], t)
+			log.Printf("[fleet] Initialized with saved cluster seed ID = %s", SeedId())
+			return
+		}
+	}
+
 	s := make([]byte, 128)
 
+	// try to load from file (legacy) and remove file (makeSeed will store it on disk)
 	if f, err := os.Open("fleet_seed.bin"); err == nil {
 		defer f.Close()
 		// let's try to read the seed from there?
@@ -60,6 +73,9 @@ func initSeed() {
 					// managed to read time too!
 					seed = makeSeed(s, t)
 					log.Printf("[fleet] Initialized with saved cluster seed ID = %s", SeedId())
+					if seed.WriteToDisk() == nil {
+						os.Remove("fleet_seed.bin")
+					}
 					return
 				}
 			}
@@ -87,13 +103,11 @@ func (s *seedData) WriteToDisk() error {
 		return err
 	}
 
-	err = ioutil.WriteFile("fleet_seed.bin~", append(seed.seed, ts...), 0600)
+	err = dbSimpleSet([]byte("fleet"), []byte("seed"), append(seed.seed, ts...))
 
 	if err != nil {
 		return err
 	}
-
-	os.Rename("fleet_seed.bin~", "fleet_seed.bin")
 
 	return nil
 }

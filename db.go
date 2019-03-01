@@ -8,7 +8,7 @@ import (
 )
 
 // DB is a local db with data versioned & copied across all members of the fleet through the DB endpoint
-// each DB update is pushed to everyone
+// each regular DB update is pushed to everyone
 // each DB entry has a nanosecond timestamp, if multiple updates of one key are done at the same time they are all kept together
 // any node can ask to replay changes done to the db since any point in time, including zero
 // timestamp for keys are stored in 2x int64 (second, nanosecond), as bigendian when serialized
