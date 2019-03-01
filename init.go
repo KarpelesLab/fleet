@@ -4,6 +4,7 @@ package fleet
 func init() {
 	initLog()
 	initPath()
+	initDb()
 	initSeed()
 	initAgent()
 }
