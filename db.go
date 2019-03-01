@@ -31,14 +31,14 @@ func DbGet(key string) (string, error) {
 
 // simple db set for program usage
 func DbSet(key string, value []byte) error {
-	v := DbNow()
+	return feedDbSetBC([]byte("app"), []byte(key), value, DbNow())
+}
 
-	if err := feedDbSet([]byte("app"), []byte(key), value, v); err != nil {
+func feedDbSetBC(bucket, key, val []byte, v DbStamp) error {
+	if err := feedDbSet(bucket, key, val, v); err != nil {
 		return err
 	}
-
-	// broadcast
-	Agent.broadcastDbRecord([]byte("app"), []byte(key), value, v)
+	Agent.broadcastDbRecord(bucket, key, val, v)
 	return nil
 }
 
@@ -70,6 +70,10 @@ func feedDbSet(bucket, key, val []byte, v DbStamp) error {
 		if err != nil {
 			return err
 		}
+		vl, err := tx.CreateBucketIfNotExists([]byte("vlog"))
+		if err != nil {
+			return err
+		}
 		b, err := tx.CreateBucketIfNotExists(bucket)
 		if err != nil {
 			return err
@@ -78,6 +82,10 @@ func feedDbSet(bucket, key, val []byte, v DbStamp) error {
 		vBin, _ := v.MarshalBinary()
 
 		err = vb.Put(fk, vBin)
+		if err != nil {
+			return err
+		}
+		err = vl.Put(append(vBin, fk...), vBin)
 		if err != nil {
 			return err
 		}
