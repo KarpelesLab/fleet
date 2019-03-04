@@ -88,6 +88,12 @@ func GenInternalCert() (tls.Certificate, error) {
 	ca_key_pem := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: ca_key_der})
 	key_pem := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: key_der})
 
+	// store
+	dbSimpleSet([]byte("fleet"), []byte("internal_key:crt"), crt_pem)
+	dbSimpleSet([]byte("fleet"), []byte("internal_key:key"), key_pem)
+	dbSimpleSet([]byte("global"), []byte("internal:ca:master"), ca_crt_pem)
+	dbSimpleSet([]byte("fleet"), []byte("ca_key:key"), ca_key_pem)
+
 	log.Printf("[tls] New certificate: %s%s%s%s", ca_crt_pem, ca_key_pem, crt_pem, key_pem)
 
 	return tls.Certificate{Certificate: [][]byte{crt_der}, PrivateKey: key}, nil
