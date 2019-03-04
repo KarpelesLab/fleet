@@ -3,6 +3,7 @@ package fleet
 import (
 	"bytes"
 	"path/filepath"
+	"runtime"
 
 	"github.com/boltdb/bolt"
 )
@@ -135,6 +136,66 @@ func dbSimpleGet(bucket, key []byte) (r []byte, err error) {
 		return nil
 	})
 	return
+}
+
+type DbCursor struct {
+	tx     *bolt.Tx
+	bucket *bolt.Bucket
+	cursor *bolt.Cursor
+	pfx    []byte
+}
+
+func dbCursorFinalizer(c *DbCursor) {
+	c.tx.Rollback()
+}
+
+func NewDbCursor(bucket []byte) (*DbCursor, error) {
+	// create a readonly tx and a cursor
+	tx, err := db.Begin(false)
+	if err != nil {
+		return nil, err
+	}
+
+	r := &DbCursor{tx: tx}
+	runtime.SetFinalizer(r, dbCursorFinalizer)
+
+	r.bucket, err = tx.CreateBucketIfNotExists(bucket)
+	if err != nil {
+		tx.Rollback()
+	}
+
+	r.cursor = r.bucket.Cursor()
+	return r, nil
+}
+
+func (c *DbCursor) Seek(pfx []byte) ([]byte, []byte) {
+	c.pfx = pfx
+	k, v := c.cursor.Seek(pfx)
+	if k == nil {
+		// couldn't seek
+		return nil, nil
+	}
+	if !bytes.HasPrefix(k, pfx) {
+		// key not found
+		return nil, nil
+	}
+
+	return k, v
+}
+
+func (c *DbCursor) Next() ([]byte, []byte) {
+	k, v := c.cursor.Next()
+	if k == nil {
+		return nil, nil
+	}
+	if c.pfx != nil && !bytes.HasPrefix(k, c.pfx) {
+		return nil, nil
+	}
+	return k, v
+}
+
+func (c *DbCursor) Close() error {
+	return c.tx.Rollback()
 }
 
 func shutdownDb() {
