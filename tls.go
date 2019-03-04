@@ -121,6 +121,7 @@ func GetInternalCert() (tls.Certificate, error) {
 			// return
 			return tls.X509KeyPair(crt, key)
 		}
+		return GenInternalCert()
 	}
 
 	key, err := dbSimpleGet([]byte("fleet"), []byte("internal_key:key"))
