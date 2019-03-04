@@ -2,6 +2,7 @@ package fleet
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"runtime"
 
@@ -126,13 +127,14 @@ func dbSimpleGet(bucket, key []byte) (r []byte, err error) {
 	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucket)
 		if b == nil {
-			return nil
+			return os.ErrNotExist
 		}
 		v := b.Get(key)
-		if v != nil {
-			r = make([]byte, len(v))
-			copy(r, v)
+		if v == nil {
+			return os.ErrNotExist
 		}
+		r = make([]byte, len(v))
+		copy(r, v)
 		return nil
 	})
 	return
