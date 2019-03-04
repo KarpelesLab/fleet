@@ -1,13 +1,95 @@
 package fleet
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"io/ioutil"
+	"log"
+	"math/big"
 	"os"
 	"path/filepath"
+	"time"
+
+	"github.com/google/uuid"
 )
+
+func GenInternalCert() (tls.Certificate, error) {
+	log.Printf("[tls] Generating new CA & client certificates")
+	// generate a new CA & certificate
+	ca_key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	// generate key
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	id, err := uuid.NewRandom()
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	host, err := os.Hostname()
+	if err != nil {
+		// error getting hostname?
+		host = "localhost"
+	}
+
+	// generate CA cert
+	// copy value
+	tplCA := tplCAcrt
+	tplCA.NotBefore = time.Now()
+	tplCA.NotAfter = tplCA.NotBefore.Add(10 * 365 * 24 * time.Hour) // +10 years (more or less)
+
+	ca_crt_der, err := x509.CreateCertificate(rand.Reader, &tplCA, &tplCA, ca_key.Public(), ca_key)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	ca_crt, err := x509.ParseCertificate(ca_crt_der)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	// generate client cert & sign
+	tplUsr := tplUsrCrt
+	tplUsr.SerialNumber = big.NewInt(0).SetBytes(id[:])
+	tplUsr.Subject.CommonName = host
+
+	crt_der, err := x509.CreateCertificate(rand.Reader, &tplUsr, ca_crt, key.Public(), ca_key)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	// encode keys
+	ca_key_der, err := x509.MarshalPKCS8PrivateKey(ca_key)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	key_der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	// store stuff as PEM
+	ca_crt_pem := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca_crt_der})
+	crt_pem := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: crt_der})
+	ca_key_pem := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: ca_key_der})
+	key_pem := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: key_der})
+
+	log.Printf("[tls] New certificate: %s%s%s%s", ca_crt_pem, ca_key_pem, crt_pem, key_pem)
+
+	return tls.Certificate{Certificate: [][]byte{crt_der}, PrivateKey: key}, nil
+}
 
 func GetInternalCert() (tls.Certificate, error) {
 	// get internal certificate
