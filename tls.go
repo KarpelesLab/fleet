@@ -2,6 +2,7 @@ package fleet
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"io/ioutil"
 	"os"
@@ -48,18 +49,73 @@ func GetInternalCert() (tls.Certificate, error) {
 	return tls.X509KeyPair(crt, key)
 }
 
+func GetDefaultPublicCert() (tls.Certificate, error) {
+	// get internal certificate
+	crt, err := dbSimpleGet([]byte("fleet"), []byte("public_key:crt"))
+	if err != nil {
+		// failed to load?
+		if _, err := os.Stat(filepath.Join(initialPath, "public_key.pem")); err == nil {
+			// file exists there, read the files
+			crt, err = ioutil.ReadFile(filepath.Join(initialPath, "public_key.pem"))
+			if err != nil {
+				return tls.Certificate{}, err
+			}
+			key, err := ioutil.ReadFile(filepath.Join(initialPath, "public_key.key"))
+			if err != nil {
+				return tls.Certificate{}, err
+			}
+			// store into db
+			err = dbSimpleSet([]byte("fleet"), []byte("public_key:crt"), crt)
+			if err != nil {
+				return tls.Certificate{}, err
+			}
+			err = dbSimpleSet([]byte("fleet"), []byte("public_key:key"), crt)
+			if err != nil {
+				return tls.Certificate{}, err
+			}
+			// remove files
+			os.Remove(filepath.Join(initialPath, "public_key.pem"))
+			os.Remove(filepath.Join(initialPath, "public_key.key"))
+			// return
+			return tls.X509KeyPair(crt, key)
+		}
+	}
+
+	key, err := dbSimpleGet([]byte("fleet"), []byte("public_key:key"))
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	return tls.X509KeyPair(crt, key)
+}
+
+func GetCA() (*x509.CertPool, error) {
+	ca := x509.NewCertPool()
+
+	ca_data, err := dbSimpleGet([]byte("global"), []byte("internal:ca"))
+	if err == nil {
+		ca.AppendCertsFromPEM(ca_data)
+		return ca, nil
+	}
+
+	ca_data, err = ioutil.ReadFile(filepath.Join(initialPath, "internal_ca.pem"))
+	if err == nil {
+		ca.AppendCertsFromPEM(ca_data)
+		return ca, nil
+	}
+
+	return ca, errors.New("failed to load CA")
+}
+
 // GetTlsConfig returns TLS config suitable for making public facing ssl
 // servers.
 func GetTlsConfig() (*tls.Config, error) {
-	if _, err := os.Stat(filepath.Join(initialPath, "public_key.pem")); err == nil {
-		cert, err := tls.LoadX509KeyPair(filepath.Join(initialPath, "public_key.pem"), filepath.Join(initialPath, "public_key.key"))
-		if err == nil {
-			cfg := new(tls.Config)
-			cfg.Certificates = []tls.Certificate{cert}
-			SeedTlsConfig(cfg)
-			ConfigureTlsServer(cfg)
-			return cfg, nil
-		}
+	if cert, err := GetDefaultPublicCert(); err == nil {
+		cfg := new(tls.Config)
+		cfg.Certificates = []tls.Certificate{cert}
+		SeedTlsConfig(cfg)
+		ConfigureTlsServer(cfg)
+		return cfg, nil
 	}
 
 	if cert, err := GetInternalCert(); err == nil {

@@ -91,13 +91,7 @@ func (a *AgentObj) doInit() (err error) {
 	}
 
 	// load CA
-	ca_data, err := ioutil.ReadFile(filepath.Join(initialPath, "internal_ca.pem"))
-	if err != nil {
-		return
-	}
-
-	a.ca = x509.NewCertPool()
-	a.ca.AppendCertsFromPEM(ca_data)
+	a.ca, _ = GetCA()
 
 	// create tls.Config objects
 	a.inCfg = new(tls.Config)
