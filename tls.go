@@ -63,6 +63,8 @@ func GenInternalCert() (tls.Certificate, error) {
 	tplUsr := tplUsrCrt
 	tplUsr.SerialNumber = big.NewInt(0).SetBytes(id[:])
 	tplUsr.Subject.CommonName = host
+	tplUsr.NotBefore = time.Now()
+	tplUsr.NotAfter = tplUsr.NotBefore.Add(1 * 365 * 24 * time.Hour) // +10 years (more or less)
 
 	crt_der, err := x509.CreateCertificate(rand.Reader, &tplUsr, ca_crt, key.Public(), ca_key)
 	if err != nil {
