@@ -92,19 +92,36 @@ func GetDefaultPublicCert() (tls.Certificate, error) {
 func GetCA() (*x509.CertPool, error) {
 	ca := x509.NewCertPool()
 
-	ca_data, err := dbSimpleGet([]byte("global"), []byte("internal:ca"))
+	// get records
+	c, err := NewDbCursor([]byte("global"))
+	count := 0
+
 	if err == nil {
-		ca.AppendCertsFromPEM(ca_data)
-		return ca, nil
+		defer c.Close()
+		k, v := c.Seek([]byte("internal:ca:"))
+		for {
+			if k == nil {
+				break
+			}
+			ca.AppendCertsFromPEM(v)
+			count++
+			k, v = c.Next()
+		}
 	}
 
-	ca_data, err = ioutil.ReadFile(filepath.Join(initialPath, "internal_ca.pem"))
-	if err == nil {
-		ca.AppendCertsFromPEM(ca_data)
-		return ca, nil
+	if count == 0 {
+		// nothing found in db, check for file?
+		if ca_data, err := ioutil.ReadFile(filepath.Join(initialPath, "internal_ca.pem")); err == nil {
+			ca.AppendCertsFromPEM(ca_data)
+			// store in db
+			err = dbSimpleSet([]byte("global"), []byte("internal:ca:legacy_import"), ca_data)
+			if err == nil {
+				os.Remove(filepath.Join(initialPath, "internal_ca.pem"))
+			}
+		}
 	}
 
-	return ca, errors.New("failed to load CA")
+	return ca, nil
 }
 
 // GetTlsConfig returns TLS config suitable for making public facing ssl

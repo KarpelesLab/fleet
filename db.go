@@ -171,6 +171,9 @@ func NewDbCursor(bucket []byte) (*DbCursor, error) {
 func (c *DbCursor) Seek(pfx []byte) ([]byte, []byte) {
 	c.pfx = pfx
 	k, v := c.cursor.Seek(pfx)
+	if pfx == nil {
+		return k, v
+	}
 	if k == nil {
 		// couldn't seek
 		return nil, nil
@@ -180,7 +183,7 @@ func (c *DbCursor) Seek(pfx []byte) ([]byte, []byte) {
 		return nil, nil
 	}
 
-	return k, v
+	return k[len(pfx):], v
 }
 
 func (c *DbCursor) First() ([]byte, []byte) {
@@ -198,8 +201,11 @@ func (c *DbCursor) Next() ([]byte, []byte) {
 	if k == nil {
 		return nil, nil
 	}
-	if c.pfx != nil && !bytes.HasPrefix(k, c.pfx) {
-		return nil, nil
+	if c.pfx != nil {
+		if !bytes.HasPrefix(k, c.pfx) {
+			return nil, nil
+		}
+		return k[len(c.pfx):], v
 	}
 	return k, v
 }
