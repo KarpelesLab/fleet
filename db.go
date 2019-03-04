@@ -183,6 +183,16 @@ func (c *DbCursor) Seek(pfx []byte) ([]byte, []byte) {
 	return k, v
 }
 
+func (c *DbCursor) First() ([]byte, []byte) {
+	c.pfx = nil
+	return c.cursor.First()
+}
+
+func (c *DbCursor) Last() ([]byte, []byte) {
+	c.pfx = nil
+	return c.cursor.Last()
+}
+
 func (c *DbCursor) Next() ([]byte, []byte) {
 	k, v := c.cursor.Next()
 	if k == nil {
