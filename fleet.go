@@ -85,7 +85,7 @@ func (a *AgentObj) doInit() (err error) {
 	a.name = a.self.Name
 	a.division = a.self.DivisionId
 
-	a.cert, err = tls.LoadX509KeyPair(filepath.Join(initialPath, "internal_key.pem"), filepath.Join(initialPath, "internal_key.key"))
+	a.cert, err = GetInternalCert()
 	if err != nil {
 		return
 	}

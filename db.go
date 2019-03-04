@@ -44,6 +44,11 @@ func feedDbSetBC(bucket, key, val []byte, v DbStamp) error {
 }
 
 func feedDbSet(bucket, key, val []byte, v DbStamp) error {
+	if string(bucket) == "local" || string(bucket) == "fleet" {
+		// bucket "local" cannot be replicated
+		return nil
+	}
+
 	// compute global key (bucket + NUL + key)
 	fk := append(append(bucket, 0), key...)
 	// check version
