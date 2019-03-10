@@ -163,9 +163,10 @@ func NewDbCursor(bucket []byte) (*DbCursor, error) {
 	r := &DbCursor{tx: tx}
 	runtime.SetFinalizer(r, dbCursorFinalizer)
 
-	r.bucket, err = tx.CreateBucketIfNotExists(bucket)
-	if err != nil {
+	r.bucket = tx.Bucket(bucket)
+	if r.bucket == nil {
 		tx.Rollback()
+		return nil, os.ErrNotExist
 	}
 
 	r.cursor = r.bucket.Cursor()
