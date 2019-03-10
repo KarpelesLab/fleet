@@ -538,6 +538,7 @@ func (a *AgentObj) DumpInfo(w io.Writer) {
 	for _, bk := range []string{"fleet", "global"} {
 		var l []string
 		if c, err := NewDbCursor([]byte(bk)); err == nil {
+			defer c.Close()
 			k, _ := c.First()
 			for {
 				if k == nil {
