@@ -547,7 +547,7 @@ func (a *AgentObj) DumpInfo(w io.Writer) {
 				k, _ = c.Next()
 			}
 		}
-		fmt.Fprintf(w, "%s: %v", bk, l)
+		fmt.Fprintf(w, "%s: %v\n", bk, l)
 	}
 }
 
