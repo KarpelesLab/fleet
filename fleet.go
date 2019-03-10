@@ -532,6 +532,23 @@ func (a *AgentObj) DumpInfo(w io.Writer) {
 		fmt.Fprintf(w, "Routines: %d\n", p.numG)
 		fmt.Fprintf(w, "\n")
 	}
+
+	fmt.Fprintf(w, "\n")
+	fmt.Fprintf(w, "DB keys:\n")
+	for _, bk := range []string{"fleet", "global"} {
+		var l []string
+		if c, err := NewDbCursor([]byte(bk)); err == nil {
+			k, _ := c.First()
+			for {
+				if k == nil {
+					break
+				}
+				l = append(l, string(k))
+				k, _ = c.Next()
+			}
+		}
+		fmt.Fprintf(w, "%s: %v", bk, l)
+	}
 }
 
 func (a *AgentObj) GetPeer(id string) *Peer {
