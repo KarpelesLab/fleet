@@ -36,6 +36,7 @@ type Peer struct {
 	a *AgentObj
 
 	mutex *sync.RWMutex
+	unreg sync.Once
 
 	alive chan interface{}
 }
@@ -281,17 +282,19 @@ func (p *Peer) register() {
 }
 
 func (p *Peer) unregister() {
-	a := p.a
+	p.unreg.Do(func() {
+		a := p.a
 
-	a.peersMutex.Lock()
-	defer a.peersMutex.Unlock()
+		a.peersMutex.Lock()
+		defer a.peersMutex.Unlock()
 
-	old, ok := a.peers[p.id]
-	if ok && old == p {
-		delete(a.peers, p.id)
-	}
+		old, ok := a.peers[p.id]
+		if ok && old == p {
+			delete(a.peers, p.id)
+		}
 
-	close(p.alive) // no more alive
+		close(p.alive) // no more alive
+	})
 }
 
 func (p *Peer) sendHandshake() error {
