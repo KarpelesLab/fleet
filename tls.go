@@ -119,7 +119,7 @@ func GetInternalCert() (tls.Certificate, error) {
 			if err != nil {
 				return tls.Certificate{}, err
 			}
-			err = dbSimpleSet([]byte("fleet"), []byte("internal_key:key"), crt)
+			err = dbSimpleSet([]byte("fleet"), []byte("internal_key:key"), key)
 			if err != nil {
 				return tls.Certificate{}, err
 			}
@@ -160,7 +160,7 @@ func GetDefaultPublicCert() (tls.Certificate, error) {
 			if err != nil {
 				return tls.Certificate{}, err
 			}
-			err = dbSimpleSet([]byte("fleet"), []byte("public_key:key"), crt)
+			err = dbSimpleSet([]byte("fleet"), []byte("public_key:key"), key)
 			if err != nil {
 				return tls.Certificate{}, err
 			}

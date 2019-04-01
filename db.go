@@ -20,7 +20,9 @@ var db *bolt.DB
 func initDb() {
 	// Open the Bolt database located in the config directory
 	var err error
-	db, err = bolt.Open(filepath.Join(GetConfigDir(), "fleet.db"), 0600, nil)
+	d := GetConfigDir()
+	EnsureDir(d)
+	db, err = bolt.Open(filepath.Join(d, "fleet.db"), 0600, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -161,9 +163,10 @@ func NewDbCursor(bucket []byte) (*DbCursor, error) {
 	r := &DbCursor{tx: tx}
 	runtime.SetFinalizer(r, dbCursorFinalizer)
 
-	r.bucket, err = tx.CreateBucketIfNotExists(bucket)
-	if err != nil {
+	r.bucket = tx.Bucket(bucket)
+	if r.bucket == nil {
 		tx.Rollback()
+		return nil, os.ErrNotExist
 	}
 
 	r.cursor = r.bucket.Cursor()
