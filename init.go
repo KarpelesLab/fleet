@@ -7,6 +7,7 @@ func init() {
 	initDb()
 	initSeed()
 	initAgent()
+	go directoryThread()
 }
 
 func Shutdown() {
