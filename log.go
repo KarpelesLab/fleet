@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/MagicalTux/ringbuf"
+	"github.com/KarpelesLab/ringbuf"
 )
 
 var logbuf *ringbuf.Writer

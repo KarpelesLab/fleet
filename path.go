@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/TrisTech/goupd"
+	"github.com/KarpelesLab/goupd"
 )
 
 var initialPath string
@@ -15,7 +15,11 @@ func initPath() {
 	getInitialPath()
 	if goupd.PROJECT_NAME != "unconfigured" {
 		// chdir to cache
-		c := GetCacheDir()
+		c, err := os.UserCacheDir()
+		if err != nil {
+			panic(err)
+		}
+		c = filepath.Join(c, goupd.PROJECT_NAME)
 		if err := EnsureDir(c); err != nil {
 			log.Printf("[fleet] Failed to access cache directory: %s", err)
 			return
@@ -40,14 +44,6 @@ func getInitialPath() {
 
 	// get directory
 	initialPath = filepath.Dir(exe)
-}
-
-func GetCacheDir() string {
-	return filepath.Join(cacheFolder, goupd.PROJECT_NAME)
-}
-
-func GetConfigDir() string {
-	return filepath.Join(globalSettingFolder, goupd.PROJECT_NAME)
 }
 
 func EnsureDir(c string) error {

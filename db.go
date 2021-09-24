@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/KarpelesLab/goupd"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -19,8 +20,11 @@ var db *bolt.DB
 
 func initDb() {
 	// Open the Bolt database located in the config directory
-	var err error
-	d := GetConfigDir()
+	d, err := os.UserConfigDir()
+	if err != nil {
+		panic(err)
+	}
+	d = filepath.Join(d, goupd.PROJECT_NAME)
 	EnsureDir(d)
 	db, err = bolt.Open(filepath.Join(d, "fleet.db"), 0600, nil)
 	if err != nil {

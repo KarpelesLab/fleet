@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/TrisTech/goupd"
+	"github.com/KarpelesLab/goupd"
 )
 
 type Peer struct {
