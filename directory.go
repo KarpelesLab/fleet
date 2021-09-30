@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -91,7 +90,7 @@ func jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
 	u := &url.URL{
 		Scheme: "https",
 		Host:   dir,
-		Path:   "/_ping",
+		Path:   "/ping",
 	}
 
 	// post body
@@ -115,6 +114,7 @@ func jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+string(jwt))
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -126,8 +126,12 @@ func jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
 		return fmt.Errorf("invalid response from server: %s", resp.Status)
 	}
 
-	// make sure to read full response (but drop it for now)
-	io.Copy(ioutil.Discard, resp.Body)
+	buf, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	log.Printf("[fleet] debug ping response: %s", buf)
 
 	return nil
 }
