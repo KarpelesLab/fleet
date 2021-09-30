@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -119,6 +120,10 @@ func jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
 		return err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode > 299 {
+		return fmt.Errorf("invalid response from server: %s", resp.Status)
+	}
 
 	// make sure to read full response (but drop it for now)
 	io.Copy(ioutil.Discard, resp.Body)
