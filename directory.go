@@ -161,6 +161,8 @@ func loadSysJwt(jwt []byte) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("invalid jwt, signature decode failed: %w", err)
 	}
 
+	signString := jwt[:len(head)+len(body)+1] // head+'.'+body
+
 	// parse header
 	var hInfo map[string]string // header will only include string values
 	err = json.Unmarshal(head, &hInfo)
@@ -195,7 +197,7 @@ func loadSysJwt(jwt []byte) (map[string]interface{}, error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid jwt key, expected RSA, got %T", keyObj)
 		}
-		h := sha256.Sum256(body)
+		h := sha256.Sum256(signString)
 		err := rsa.VerifyPKCS1v15(pk, crypto.SHA256, h[:], sign)
 		if err != nil {
 			return nil, fmt.Errorf("invalid jwt key, bad RSA signature: %w", err)
@@ -205,7 +207,7 @@ func loadSysJwt(jwt []byte) (map[string]interface{}, error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid jwt key, expected ECDSA, got %T", keyObj)
 		}
-		h := sha256.Sum256(body)
+		h := sha256.Sum256(signString)
 		if !ecdsa.VerifyASN1(pk, h[:], sign) {
 			return nil, fmt.Errorf("invalid jwt key, bad ECDSA signature")
 		}
@@ -214,7 +216,7 @@ func loadSysJwt(jwt []byte) (map[string]interface{}, error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid jwt key, expected Ed25519, got %T", keyObj)
 		}
-		if !ed25519.Verify(pk, body, sign) {
+		if !ed25519.Verify(pk, signString, sign) {
 			return nil, fmt.Errorf("invalid jwt key, bad Ed25519 signature")
 		}
 	default:
