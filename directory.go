@@ -9,7 +9,6 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -63,9 +62,9 @@ func directoryThread() {
 		return
 	}
 
-	dir, ok := jwtData["directory"].(string)
+	dir, ok := jwtData["aud"].(string) // Audience
 	if !ok {
-		log.Printf("[fleet] directory failed to load: %s", err)
+		log.Printf("[fleet] directory failed to load: aud claim not found")
 		return
 	}
 
@@ -199,7 +198,7 @@ func loadSysJwt(jwt []byte) (map[string]interface{}, error) {
 			return nil, fmt.Errorf("invalid jwt key, expected RSA, got %T", keyObj)
 		}
 		h := sha256.Sum256(signString)
-		log.Printf("debug info: signString=%s hash=%s pk=%s sign=%s", signString, hex.EncodeToString(h[:]), kid, hex.EncodeToString(sign))
+		//log.Printf("debug info: signString=%s hash=%s pk=%s sign=%s", signString, hex.EncodeToString(h[:]), kid, hex.EncodeToString(sign))
 		err := rsa.VerifyPKCS1v15(pk, crypto.SHA256, h[:], sign)
 		if err != nil {
 			return nil, fmt.Errorf("invalid jwt key, bad RSA signature: %w", err)
@@ -230,6 +229,15 @@ func loadSysJwt(jwt []byte) (map[string]interface{}, error) {
 	err = json.Unmarshal(body, &res)
 	if err != nil {
 		return nil, err
+	}
+
+	// "exp":1665025870
+	if exp, ok := res["exp"].(float64); ok {
+		// got an expiration date in "exp", as a unix timestamp
+		expTime := time.Unix(int64(exp), 0)
+		if time.Now().After(expTime) {
+			return nil, fmt.Errorf("invalid jwt, expired on %s", expTime)
+		}
 	}
 
 	return res, nil
