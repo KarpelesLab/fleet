@@ -162,7 +162,7 @@ func loadSysJwt(jwt []byte) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("invalid jwt, signature decode failed: %w", err)
 	}
 
-	signString := jwt[:len(head)+len(body)+1] // head+'.'+body
+	signString := jwt[:len(jwtA[0])+len(jwtA[1])+1] // head+'.'+body
 
 	// parse header
 	var hInfo map[string]string // header will only include string values
