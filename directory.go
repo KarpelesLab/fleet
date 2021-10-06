@@ -2,8 +2,14 @@ package fleet
 
 import (
 	"bytes"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -137,5 +143,90 @@ func jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
 }
 
 func loadSysJwt(jwt []byte) (map[string]interface{}, error) {
-	return nil, errors.New("TODO")
+	jwtA := bytes.SplitN(jwt, []byte{'.'}, 3)
+	if len(jwtA) != 3 {
+		return nil, fmt.Errorf("invalid jwt, expecting 3 parts, got %d", len(jwtA))
+	}
+	// decode
+	head, err := base64.RawURLEncoding.DecodeString(string(jwtA[0]))
+	if err != nil {
+		return nil, fmt.Errorf("invalid jwt, header decode failed: %w", err)
+	}
+	body, err := base64.RawURLEncoding.DecodeString(string(jwtA[1]))
+	if err != nil {
+		return nil, fmt.Errorf("invalid jwt, body decode failed: %w", err)
+	}
+	sign, err := base64.RawURLEncoding.DecodeString(string(jwtA[2]))
+	if err != nil {
+		return nil, fmt.Errorf("invalid jwt, signature decode failed: %w", err)
+	}
+
+	// parse header
+	var hInfo map[string]string // header will only include string values
+	err = json.Unmarshal(head, &hInfo)
+	if err != nil {
+		return nil, fmt.Errorf("invalid jwt, header parse failed: %w", err)
+	}
+
+	// check signature. We need "alg" and "kid"
+	kid, ok := hInfo["kid"]
+	if !ok {
+		return nil, fmt.Errorf("invalid jwt, missing kid")
+	}
+	alg, ok := hInfo["alg"]
+	if !ok {
+		return nil, fmt.Errorf("invalid jwt, missing alg")
+	}
+
+	key, err := base64.RawURLEncoding.DecodeString(kid)
+	if err != nil {
+		return nil, fmt.Errorf("invalid jwt, failed to decode kid: %w", err)
+	}
+	keyObj, err := x509.ParsePKIXPublicKey(key)
+	if err != nil {
+		return nil, fmt.Errorf("invalid jwt, failed to parse kid: %w", err)
+	}
+	// keyObj is a *rsa.PublicKey, *dsa.PublicKey, *ecdsa.PublicKey, or ed25519.PublicKey
+
+	// check signature
+	switch alg {
+	case "RS256": // RSA
+		pk, ok := keyObj.(*rsa.PublicKey)
+		if !ok {
+			return nil, fmt.Errorf("invalid jwt key, expected RSA, got %T", keyObj)
+		}
+		h := sha256.Sum256(body)
+		err := rsa.VerifyPKCS1v15(pk, crypto.SHA256, h[:], sign)
+		if err != nil {
+			return nil, fmt.Errorf("invalid jwt key, bad RSA signature: %w", err)
+		}
+	case "ES256": // ECDSA
+		pk, ok := keyObj.(*ecdsa.PublicKey)
+		if !ok {
+			return nil, fmt.Errorf("invalid jwt key, expected ECDSA, got %T", keyObj)
+		}
+		h := sha256.Sum256(body)
+		if !ecdsa.VerifyASN1(pk, h[:], sign) {
+			return nil, fmt.Errorf("invalid jwt key, bad ECDSA signature")
+		}
+	case "EdDSA": // EDDSA
+		pk, ok := keyObj.(ed25519.PublicKey)
+		if !ok {
+			return nil, fmt.Errorf("invalid jwt key, expected Ed25519, got %T", keyObj)
+		}
+		if !ed25519.Verify(pk, body, sign) {
+			return nil, fmt.Errorf("invalid jwt key, bad Ed25519 signature")
+		}
+	default:
+		return nil, fmt.Errorf("unsupported signature alg=%s", alg)
+	}
+
+	// signature is good, parse body
+	var res map[string]interface{}
+	err = json.Unmarshal(body, &res)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
