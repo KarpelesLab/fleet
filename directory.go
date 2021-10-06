@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -198,6 +199,7 @@ func loadSysJwt(jwt []byte) (map[string]interface{}, error) {
 			return nil, fmt.Errorf("invalid jwt key, expected RSA, got %T", keyObj)
 		}
 		h := sha256.Sum256(signString)
+		log.Printf("debug info: signString=%s hash=%s pk=%s sign=%s", signString, hex.EncodeToString(h[:]), kid, hex.EncodeToString(sign))
 		err := rsa.VerifyPKCS1v15(pk, crypto.SHA256, h[:], sign)
 		if err != nil {
 			return nil, fmt.Errorf("invalid jwt key, bad RSA signature: %w", err)
