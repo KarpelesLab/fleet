@@ -2,11 +2,6 @@ package fleet
 
 import (
 	"bytes"
-	"crypto"
-	"crypto/ecdsa"
-	"crypto/ed25519"
-	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -20,6 +15,7 @@ import (
 	"time"
 
 	"github.com/KarpelesLab/goupd"
+	"github.com/KarpelesLab/jwt"
 )
 
 func directoryThread() {
@@ -32,17 +28,17 @@ func directoryThread() {
 	}()
 
 	// attempt to load jwt
-	jwt, err := dbSimpleGet([]byte("fleet"), []byte("internal_key:jwt"))
+	jwtData, err := dbSimpleGet([]byte("fleet"), []byte("internal_key:jwt"))
 	if err != nil {
 		if _, err := os.Stat(filepath.Join(initialPath, "internal_key.jwt")); err == nil {
 			// file exists there, read the files
-			jwt, err = ioutil.ReadFile(filepath.Join(initialPath, "internal_key.jwt"))
+			jwtData, err = ioutil.ReadFile(filepath.Join(initialPath, "internal_key.jwt"))
 			if err != nil {
 				log.Printf("[fleet] directory jwt failed to load: %s", err)
 				return
 			}
 			// store
-			err = dbSimpleSet([]byte("fleet"), []byte("internal_key:jwt"), jwt)
+			err = dbSimpleSet([]byte("fleet"), []byte("internal_key:jwt"), jwtData)
 			if err != nil {
 				log.Printf("[fleet] directory jwt failed to store: %s", err)
 				return
@@ -55,15 +51,32 @@ func directoryThread() {
 		}
 	}
 
-	// check jwt signature against kid found in header
-	jwtData, err := loadSysJwt(jwt)
+	// decode jwt
+	jwtInfo, err := jwt.ParseString(string(jwtData))
 	if err != nil {
-		log.Printf("[fleet] invalid jwt for directory: %s", err)
+		log.Printf("[fleet] failed to decode jwt: %s", err)
+		return
+	}
+	// our tokens have the actual key stored in kid
+	key, err := base64.RawURLEncoding.DecodeString(jwtInfo.GetKeyId())
+	if err != nil {
+		log.Printf("[fleet] failed to decode kid: %s", err)
+		return
+	}
+	keyObj, err := x509.ParsePKIXPublicKey(key)
+	if err != nil {
+		log.Printf("[fleet] failed to parse jwt key: %s", err)
+		return
+	}
+	// keyObj is a *rsa.PublicKey, *dsa.PublicKey, *ecdsa.PublicKey, or ed25519.PublicKey
+	err = jwtInfo.Verify(jwt.VerifySignature(keyObj), jwt.VerifyTime(time.Now(), false))
+	if err != nil {
+		log.Printf("[fleet] failed to verify jwt: %s", err)
 		return
 	}
 
-	dir, ok := jwtData["aud"].(string) // Audience
-	if !ok {
+	dir := jwtInfo.Payload().GetString("aud") // Audience
+	if dir == "" {
 		log.Printf("[fleet] directory failed to load: aud claim not found")
 		return
 	}
@@ -84,7 +97,7 @@ func directoryThread() {
 
 	for {
 		// connect to directory, ping, etc
-		err = jwtPingDirectory(dir, jwt, client)
+		err = jwtPingDirectory(dir, jwtData, client)
 		if err != nil {
 			log.Printf("[fleet] ping failed: %s", err)
 		}
@@ -140,105 +153,4 @@ func jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
 	log.Printf("[fleet] debug ping response: %s", buf)
 
 	return nil
-}
-
-func loadSysJwt(jwt []byte) (map[string]interface{}, error) {
-	jwtA := bytes.SplitN(jwt, []byte{'.'}, 3)
-	if len(jwtA) != 3 {
-		return nil, fmt.Errorf("invalid jwt, expecting 3 parts, got %d", len(jwtA))
-	}
-	// decode
-	head, err := base64.RawURLEncoding.DecodeString(string(jwtA[0]))
-	if err != nil {
-		return nil, fmt.Errorf("invalid jwt, header decode failed: %w", err)
-	}
-	body, err := base64.RawURLEncoding.DecodeString(string(jwtA[1]))
-	if err != nil {
-		return nil, fmt.Errorf("invalid jwt, body decode failed: %w", err)
-	}
-	sign, err := base64.RawURLEncoding.DecodeString(string(jwtA[2]))
-	if err != nil {
-		return nil, fmt.Errorf("invalid jwt, signature decode failed: %w", err)
-	}
-
-	signString := jwt[:len(jwtA[0])+len(jwtA[1])+1] // head+'.'+body
-
-	// parse header
-	var hInfo map[string]string // header will only include string values
-	err = json.Unmarshal(head, &hInfo)
-	if err != nil {
-		return nil, fmt.Errorf("invalid jwt, header parse failed: %w", err)
-	}
-
-	// check signature. We need "alg" and "kid"
-	kid, ok := hInfo["kid"]
-	if !ok {
-		return nil, fmt.Errorf("invalid jwt, missing kid")
-	}
-	alg, ok := hInfo["alg"]
-	if !ok {
-		return nil, fmt.Errorf("invalid jwt, missing alg")
-	}
-
-	key, err := base64.RawURLEncoding.DecodeString(kid)
-	if err != nil {
-		return nil, fmt.Errorf("invalid jwt, failed to decode kid: %w", err)
-	}
-	keyObj, err := x509.ParsePKIXPublicKey(key)
-	if err != nil {
-		return nil, fmt.Errorf("invalid jwt, failed to parse kid: %w", err)
-	}
-	// keyObj is a *rsa.PublicKey, *dsa.PublicKey, *ecdsa.PublicKey, or ed25519.PublicKey
-
-	// check signature
-	switch alg {
-	case "RS256": // RSA
-		pk, ok := keyObj.(*rsa.PublicKey)
-		if !ok {
-			return nil, fmt.Errorf("invalid jwt key, expected RSA, got %T", keyObj)
-		}
-		h := sha256.Sum256(signString)
-		//log.Printf("debug info: signString=%s hash=%s pk=%s sign=%s", signString, hex.EncodeToString(h[:]), kid, hex.EncodeToString(sign))
-		err := rsa.VerifyPKCS1v15(pk, crypto.SHA256, h[:], sign)
-		if err != nil {
-			return nil, fmt.Errorf("invalid jwt key, bad RSA signature: %w", err)
-		}
-	case "ES256": // ECDSA
-		pk, ok := keyObj.(*ecdsa.PublicKey)
-		if !ok {
-			return nil, fmt.Errorf("invalid jwt key, expected ECDSA, got %T", keyObj)
-		}
-		h := sha256.Sum256(signString)
-		if !ecdsa.VerifyASN1(pk, h[:], sign) {
-			return nil, fmt.Errorf("invalid jwt key, bad ECDSA signature")
-		}
-	case "EdDSA": // EDDSA
-		pk, ok := keyObj.(ed25519.PublicKey)
-		if !ok {
-			return nil, fmt.Errorf("invalid jwt key, expected Ed25519, got %T", keyObj)
-		}
-		if !ed25519.Verify(pk, signString, sign) {
-			return nil, fmt.Errorf("invalid jwt key, bad Ed25519 signature")
-		}
-	default:
-		return nil, fmt.Errorf("unsupported signature alg=%s", alg)
-	}
-
-	// signature is good, parse body
-	var res map[string]interface{}
-	err = json.Unmarshal(body, &res)
-	if err != nil {
-		return nil, err
-	}
-
-	// "exp":1665025870
-	if exp, ok := res["exp"].(float64); ok {
-		// got an expiration date in "exp", as a unix timestamp
-		expTime := time.Unix(int64(exp), 0)
-		if time.Now().After(expTime) {
-			return nil, fmt.Errorf("invalid jwt, expired on %s", expTime)
-		}
-	}
-
-	return res, nil
 }
