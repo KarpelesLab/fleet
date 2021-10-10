@@ -13,7 +13,6 @@ type JsonFleetHostInfo struct {
 	DivisionId string `json:"Cloud_Fleet_Division__"`
 	FleetId    string `json:"Cloud_Fleet__"`
 	Name       string
-	FetchKey   string `json:"Fetch_Key"`
 	Index      string // actually int
 	AZ         string `json:"Availability_Zone"`
 	Ip         string
@@ -21,5 +20,4 @@ type JsonFleetHostInfo struct {
 	Instance   string
 	Type       string
 	Fleet      *JsonCloudFleet `json:"Cloud_Fleet"`
-	Hosts      []*JsonFleetHostInfo
 }

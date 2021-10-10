@@ -83,7 +83,7 @@ func (a *AgentObj) doInit() (err error) {
 
 	a.id = a.self.Id
 	a.name = a.self.Name
-	a.division = a.self.DivisionId
+	a.division = a.self.AZ
 
 	a.cert, err = GetInternalCert()
 	if err != nil {
@@ -123,8 +123,6 @@ func (a *AgentObj) doInit() (err error) {
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 
-	a.connectHosts()
-
 	go a.listenLoop()
 	go a.eventLoop()
 
@@ -140,23 +138,6 @@ func (a *AgentObj) Name() (string, string) {
 		return a.self.Name, ""
 	} else {
 		return a.self.Name, a.self.Fleet.Hostname
-	}
-}
-
-func (a *AgentObj) connectHosts() {
-	a.peersMutex.RLock()
-	defer a.peersMutex.RUnlock()
-
-	for _, h := range a.self.Hosts {
-		if h.Id == a.id {
-			continue
-		}
-		// check if already connected
-		if _, ok := a.peers[h.Id]; ok {
-			continue
-		}
-
-		go a.dialPeer(h.Name+"."+a.self.Fleet.Hostname, h.Name, h.Id)
 	}
 }
 
@@ -457,14 +438,11 @@ func (a *AgentObj) listenLoop() {
 
 func (a *AgentObj) eventLoop() {
 	announce := time.NewTicker(5 * time.Second)
-	peerConnect := time.NewTicker(5 * time.Minute)
 
 	for {
 		select {
 		case <-announce.C:
 			a.doAnnounce()
-		case <-peerConnect.C:
-			a.connectHosts()
 		}
 	}
 }

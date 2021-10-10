@@ -101,6 +101,17 @@ func directoryThread() {
 		return
 	}
 
+	// jwt is good, update Agent info based on this
+	if id := jwtInfo.Payload().GetString("id"); id != "" {
+		Agent.id = id
+	}
+	if name := jwtInfo.Payload().GetString("nam"); name != "" {
+		Agent.name = name
+	}
+	if div := jwtInfo.Payload().GetString("loc"); div != "" {
+		Agent.division = div
+	}
+
 	dir := jwtInfo.Payload().GetString("aud") // Audience
 	if dir == "" {
 		log.Printf("[fleet] directory failed to load: aud claim not found")
@@ -141,7 +152,7 @@ func jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
 	// post body
 	post := map[string]interface{}{
 		"Name":     Agent.name,
-		"Location": Agent.self.AZ,
+		"Location": Agent.division,
 		"Version":  goupd.DATE_TAG + "/" + goupd.GIT_TAG,
 		"Time":     time.Now().UnixMicro(), // in ms
 		"Private": &directoryPrivate{
@@ -183,7 +194,7 @@ func jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
 
 	// {"Myself":{"Name":"jp001","Version":"20211010151149/8fed26f","TimeOffset":53348333,"Private":{"Division":"clfd-qepiqm-ufgr-hh3d-v4p5-twwxysdy","Id":"clfdh-d27zrv-bymj-fb3i-fn5x-upy5awea"},"LastSeen":"2021-10-10T09:20:12.006662333Z","IP":"13.230.154.155","Token":"
 
-	log.Printf("[fleet] debug ping response: %+v", res)
+	//log.Printf("[fleet] debug ping response: %+v", res)
 
 	for _, peer := range res.Namespace.Peers {
 		// check if we're connected
