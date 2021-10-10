@@ -185,5 +185,13 @@ func jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
 
 	log.Printf("[fleet] debug ping response: %+v", res)
 
+	for _, peer := range res.Namespace.Peers {
+		// check if we're connected
+		if Agent.IsConnected(peer.Private.Id) {
+			continue
+		}
+		go Agent.dialPeer(peer.IP, peer.Name, peer.Private.Id)
+	}
+
 	return nil
 }
