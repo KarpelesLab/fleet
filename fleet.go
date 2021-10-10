@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -255,7 +256,52 @@ func (a *AgentObj) AnyRpc(division string, endpoint string, data interface{}) er
 	return errors.New("no peer available")
 }
 
-func (a *AgentObj) DivisionRpc(division string, endpoint string, data interface{}) error {
+func (a *AgentObj) DivisionRpc(division int, endpoint string, data interface{}) error {
+	divMatch := a.division
+	if division > 0 {
+		// only keep the N first parts of divison. Eg if N=2 and "divMatch" is "a/b/c", divMatch should become "a/b/"
+		pos := 0
+		for i := 0; i < division; i += 1 {
+			Xpos := strings.IndexByte(divMatch[pos+1:], '/')
+			if Xpos == -1 {
+				// do exact match
+				pos = -1
+				break
+			}
+			pos += Xpos + 1
+		}
+		if pos > 0 {
+			divMatch = divMatch[:pos+1]
+		}
+	} else if division < 0 {
+		// only remove N last parts of division. If N=-1, "a/b/c" becomes "a/b/"
+		pos := len(divMatch)
+		for i := 0; i < 0-division; i += 1 {
+			if pos <= 1 {
+				// out of match, just go wildcard
+				pos = -1
+				break
+			}
+			Xpos := strings.LastIndexByte(divMatch[:pos-1], '/')
+			if Xpos == -1 {
+				// wildcard
+				pos = -1
+				break
+			}
+			pos = Xpos
+		}
+		if pos > 0 {
+			divMatch = divMatch[:pos]
+		} else {
+			// wildcard match
+			divMatch = ""
+		}
+	}
+
+	return a.DivisionPrefixRpc(divMatch, endpoint, data)
+}
+
+func (a *AgentObj) DivisionPrefixRpc(divMatch string, endpoint string, data interface{}) error {
 	// send request
 	pkt := &PacketRpc{
 		SourceId: a.id,
@@ -275,7 +321,7 @@ func (a *AgentObj) DivisionRpc(division string, endpoint string, data interface{
 			// do not send to self
 			continue
 		}
-		if p.division != division {
+		if !strings.HasPrefix(p.division, divMatch) {
 			continue
 		}
 		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
