@@ -18,6 +18,32 @@ import (
 	"github.com/KarpelesLab/jwt"
 )
 
+type directoryPrivate struct {
+	// "Private":{"Division":"clfd-nc2oqp-57wv-eoxd-5h3f-3o4eahl4","Id":"clfdh-yiwybb-7rdr-gq5f-fk52-6mmxlxxe"}
+	Id       string
+	Division string
+}
+
+type directoryPeer struct {
+	//{"Name":"jp001","Version":"20211010151149/8fed26f","TimeOffset":53348333,"Private":{"Division":"clfd-qepiqm-ufgr-hh3d-v4p5-twwxysdy","Id":"clfdh-d27zrv-bymj-fb3i-fn5x-upy5awea"},"LastSeen":"2021-10-10T09:20:12.006662333Z","IP":"","Token":
+	Name     string // "jp001"
+	Version  string // "20211010151149/8fed26f"
+	Location string
+	IP       string
+	Private  *directoryPrivate
+}
+
+type directoryNs struct {
+	KeyId string
+	Name  string
+	Peers []*directoryPeer
+}
+
+type directoryPingResponse struct {
+	Myself    *directoryPeer
+	Namespace *directoryNs
+}
+
 func directoryThread() {
 	// this is run in its own gorouting after db is setup
 	defer func() {
@@ -114,12 +140,13 @@ func jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
 
 	// post body
 	post := map[string]interface{}{
-		"Name":    Agent.name,
-		"Version": goupd.DATE_TAG + "/" + goupd.GIT_TAG,
-		"Time":    time.Now().UnixMicro(), // in ms
-		"Private": map[string]interface{}{
-			"Id":       Agent.id,
-			"Division": Agent.division,
+		"Name":     Agent.name,
+		"Location": Agent.self.AZ,
+		"Version":  goupd.DATE_TAG + "/" + goupd.GIT_TAG,
+		"Time":     time.Now().UnixMicro(), // in ms
+		"Private": &directoryPrivate{
+			Id:       Agent.id,
+			Division: Agent.division,
 		},
 	}
 	postJson, err := json.Marshal(post)
@@ -141,19 +168,22 @@ func jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
 	}
 	defer resp.Body.Close()
 
-	buf, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response: %w", err)
-	}
+	var res *directoryPingResponse
 
 	if resp.StatusCode > 299 {
-		if len(buf) > 128 {
-			buf = buf[:128]
-		}
+		buf, _ := ioutil.ReadAll(resp.Body)
 		return fmt.Errorf("invalid response from server: %s (data: %s)", resp.Status, buf)
 	}
 
-	log.Printf("[fleet] debug ping response: %s", buf)
+	dec := json.NewDecoder(resp.Body)
+	err = dec.Decode(&res)
+	if err != nil {
+		fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// {"Myself":{"Name":"jp001","Version":"20211010151149/8fed26f","TimeOffset":53348333,"Private":{"Division":"clfd-qepiqm-ufgr-hh3d-v4p5-twwxysdy","Id":"clfdh-d27zrv-bymj-fb3i-fn5x-upy5awea"},"LastSeen":"2021-10-10T09:20:12.006662333Z","IP":"13.230.154.155","Token":"
+
+	log.Printf("[fleet] debug ping response: %+v", res)
 
 	return nil
 }
