@@ -142,7 +142,13 @@ func jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode > 299 {
-		return fmt.Errorf("invalid response from server: %s", resp.Status)
+		bodyData := make([]byte, 128)
+		n, err := resp.Body.Read(bodyData)
+		if err != nil {
+			return fmt.Errorf("invalid response from server: %s", resp.Status)
+		}
+		bodyData = bodyData[:n]
+		return fmt.Errorf("invalid response from server: %s (data: %s)", resp.Status, bodyData)
 	}
 
 	buf, err := ioutil.ReadAll(resp.Body)
