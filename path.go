@@ -11,7 +11,10 @@ import (
 	"github.com/KarpelesLab/goupd"
 )
 
-var initialPath string
+var (
+	initialPath string
+	GetFile     func(string) ([]byte, error)
+)
 
 func initPath() {
 	getInitialPath()
@@ -79,6 +82,14 @@ func findFile(filename string) (string, error) {
 }
 
 func getFile(filename string, cb func([]byte) error) error {
+	if GetFile != nil {
+		v, err := GetFile(filename)
+		if err != nil {
+			return err
+		}
+		return cb(v)
+	}
+
 	fn, err := findFile(filename)
 	if err != nil {
 		return err
@@ -87,5 +98,11 @@ func getFile(filename string, cb func([]byte) error) error {
 	if err != nil {
 		return err
 	}
-	return cb(data)
+	err = cb(data)
+	if err != nil {
+		return err
+	}
+	// only remove after success of callback
+	os.Remove(fn)
+	return nil
 }
