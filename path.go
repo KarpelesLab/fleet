@@ -78,10 +78,14 @@ func findFile(filename string) (string, error) {
 	return "", fs.ErrNotExist
 }
 
-func getFile(filename string) ([]byte, error) {
+func getFile(filename string, cb func([]byte) error) error {
 	fn, err := findFile(filename)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return ioutil.ReadFile(fn)
+	data, err := ioutil.ReadFile(fn)
+	if err != nil {
+		return err
+	}
+	return cb(data)
 }

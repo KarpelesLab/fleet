@@ -52,19 +52,10 @@ func directoryThread() {
 	}()
 
 	// attempt to load jwt
-	jwtData, err := dbSimpleGet([]byte("fleet"), []byte("internal_key:jwt"))
+	jwtData, err := dbFleetGet("internal_key:jwt")
 	if err != nil {
-		if jwtData, err = getFile("internal_key.jwt"); err == nil {
-			// store
-			err = dbSimpleSet([]byte("fleet"), []byte("internal_key:jwt"), jwtData)
-			if err != nil {
-				log.Printf("[fleet] directory jwt failed to store: %s", err)
-				return
-			}
-		} else {
-			log.Printf("[fleet] directory jwt not found, disabling directory registration")
-			return
-		}
+		log.Printf("[fleet] directory jwt not found, disabling directory registration")
+		return
 	}
 
 	// decode jwt

@@ -101,43 +101,11 @@ func GenInternalCert() (tls.Certificate, error) {
 
 func GetInternalCert() (tls.Certificate, error) {
 	// get internal certificate
-	crt, err := dbSimpleGet([]byte("fleet"), []byte("internal_key:crt"))
+	crt, err := dbFleetGet("internal_key:crt")
 	if err != nil {
-		// failed to load?
-		pemFn, err := findFile("internal_key.pem")
-		if err != nil {
-			return GenInternalCert()
-		}
-		keyFn, err := findFile("internal_key.key")
-		if err != nil {
-			return GenInternalCert()
-		}
-		// file exists there, read the files
-		crt, err = ioutil.ReadFile(pemFn)
-		if err != nil {
-			return tls.Certificate{}, err
-		}
-		key, err := ioutil.ReadFile(keyFn)
-		if err != nil {
-			return tls.Certificate{}, err
-		}
-		// store into db
-		err = dbSimpleSet([]byte("fleet"), []byte("internal_key:crt"), crt)
-		if err != nil {
-			return tls.Certificate{}, err
-		}
-		err = dbSimpleSet([]byte("fleet"), []byte("internal_key:key"), key)
-		if err != nil {
-			return tls.Certificate{}, err
-		}
-		// remove files
-		os.Remove(pemFn)
-		os.Remove(keyFn)
-		// return
-		return tls.X509KeyPair(crt, key)
+		return tls.Certificate{}, err
 	}
-
-	key, err := dbSimpleGet([]byte("fleet"), []byte("internal_key:key"))
+	key, err := dbFleetGet("internal_key:key")
 	if err != nil {
 		return tls.Certificate{}, err
 	}
@@ -147,37 +115,11 @@ func GetInternalCert() (tls.Certificate, error) {
 
 func GetDefaultPublicCert() (tls.Certificate, error) {
 	// get internal certificate
-	crt, err := dbSimpleGet([]byte("fleet"), []byte("public_key:crt"))
+	crt, err := dbFleetGet("public_key:crt")
 	if err != nil {
-		// failed to load?
-		if _, err := os.Stat(filepath.Join(initialPath, "public_key.pem")); err == nil {
-			// file exists there, read the files
-			crt, err = ioutil.ReadFile(filepath.Join(initialPath, "public_key.pem"))
-			if err != nil {
-				return tls.Certificate{}, err
-			}
-			key, err := ioutil.ReadFile(filepath.Join(initialPath, "public_key.key"))
-			if err != nil {
-				return tls.Certificate{}, err
-			}
-			// store into db
-			err = dbSimpleSet([]byte("fleet"), []byte("public_key:crt"), crt)
-			if err != nil {
-				return tls.Certificate{}, err
-			}
-			err = dbSimpleSet([]byte("fleet"), []byte("public_key:key"), key)
-			if err != nil {
-				return tls.Certificate{}, err
-			}
-			// remove files
-			os.Remove(filepath.Join(initialPath, "public_key.pem"))
-			os.Remove(filepath.Join(initialPath, "public_key.key"))
-			// return
-			return tls.X509KeyPair(crt, key)
-		}
+		return tls.Certificate{}, err
 	}
-
-	key, err := dbSimpleGet([]byte("fleet"), []byte("public_key:key"))
+	key, err := dbFleetGet("public_key:key")
 	if err != nil {
 		return tls.Certificate{}, err
 	}

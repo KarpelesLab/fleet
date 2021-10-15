@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/KarpelesLab/goupd"
 	bolt "go.etcd.io/bbolt"
@@ -144,6 +145,28 @@ func dbSimpleGet(bucket, key []byte) (r []byte, err error) {
 		return nil
 	})
 	return
+}
+
+func dbFleetGet(keyname string) ([]byte, error) {
+	// for example keyname="internal_key:jwt"
+
+	data, err := dbSimpleGet([]byte("fleet"), []byte(keyname))
+	if err == nil {
+		return data, nil
+	}
+
+	// attempt to locate file named a.b for key a:b
+	filename := strings.ReplaceAll(keyname, ":", ".")
+
+	err = getFile(filename, func(v []byte) error {
+		data = v
+		return dbSimpleSet([]byte("fleet"), []byte(keyname), v)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
 }
 
 type DbCursor struct {
