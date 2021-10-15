@@ -10,8 +10,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/KarpelesLab/goupd"
@@ -56,21 +54,13 @@ func directoryThread() {
 	// attempt to load jwt
 	jwtData, err := dbSimpleGet([]byte("fleet"), []byte("internal_key:jwt"))
 	if err != nil {
-		if _, err := os.Stat(filepath.Join(initialPath, "internal_key.jwt")); err == nil {
-			// file exists there, read the files
-			jwtData, err = ioutil.ReadFile(filepath.Join(initialPath, "internal_key.jwt"))
-			if err != nil {
-				log.Printf("[fleet] directory jwt failed to load: %s", err)
-				return
-			}
+		if jwtData, err = getFile("internal_key.jwt"); err == nil {
 			// store
 			err = dbSimpleSet([]byte("fleet"), []byte("internal_key:jwt"), jwtData)
 			if err != nil {
 				log.Printf("[fleet] directory jwt failed to store: %s", err)
 				return
 			}
-			// remove file
-			os.Remove(filepath.Join(initialPath, "internal_key.jwt"))
 		} else {
 			log.Printf("[fleet] directory jwt not found, disabling directory registration")
 			return

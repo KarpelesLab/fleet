@@ -2,6 +2,8 @@ package fleet
 
 import (
 	"errors"
+	"io/fs"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -59,4 +61,27 @@ func EnsureDir(c string) error {
 		return errors.New("error: file exists at directory location")
 	}
 	return nil
+}
+
+func findFile(filename string) (string, error) {
+	// locate file
+	if _, err := os.Stat(filepath.Join(initialPath, filename)); err == nil {
+		return filepath.Join(initialPath, filename), nil
+	}
+
+	if cwd, err := os.Getwd(); err == nil {
+		if _, err = os.Stat(filepath.Join(cwd, filename)); err == nil {
+			return filepath.Join(cwd, filename), nil
+		}
+	}
+
+	return "", fs.ErrNotExist
+}
+
+func getFile(filename string) ([]byte, error) {
+	fn, err := findFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	return ioutil.ReadFile(fn)
 }
