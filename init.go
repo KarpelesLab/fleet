@@ -1,7 +1,7 @@
 package fleet
 
 // perform init of various elements in order
-func init() {
+func Init() {
 	initLog()
 	initPath()
 	initDb()
