@@ -82,19 +82,7 @@ func directoryThread() {
 		return
 	}
 
-	// jwt is good, update Agent info based on this
-	if id := jwtInfo.Payload().GetString("id"); id != "" {
-		Agent.id = id
-	}
-	if name := jwtInfo.Payload().GetString("nam"); name != "" {
-		Agent.name = name
-	}
-	if div := jwtInfo.Payload().GetString("loc"); div != "" {
-		Agent.division = div
-	}
-	if iss := jwtInfo.Payload().GetString("iss"); iss != "" {
-		Agent.hostname = iss
-	}
+	initAgent(jwtInfo)
 
 	dir := jwtInfo.Payload().GetString("aud") // Audience
 	if dir == "" {

@@ -17,11 +17,19 @@ import (
 	"sync/atomic"
 	"time"
 	"unsafe"
+
+	"github.com/KarpelesLab/jwt"
 )
 
 var (
-	Agent *AgentObj
-	rpcE  map[string]RpcEndpoint
+	Agent = &AgentObj{
+		id:       "local",
+		name:     "local",
+		peers:    make(map[string]*Peer),
+		services: make(map[string]chan net.Conn),
+		rpc:      make(map[uintptr]chan *PacketRpcResponse),
+	}
+	rpcE map[string]RpcEndpoint
 )
 
 type AgentObj struct {
@@ -50,22 +58,29 @@ type AgentObj struct {
 	rpcL sync.RWMutex
 }
 
-func initAgent() {
-	Agent = new(AgentObj)
-
-	err := Agent.doInit()
+func initAgent(token *jwt.Token) {
+	err := Agent.doInit(token)
 	if err != nil {
 		log.Printf("[agent] failed to init agent: %s", err)
 	}
 }
 
-func (a *AgentObj) doInit() (err error) {
-	a.peers = make(map[string]*Peer)
-	a.services = make(map[string]chan net.Conn)
-	a.rpc = make(map[uintptr]chan *PacketRpcResponse)
-
-	a.id = "local"
-	a.name = "local"
+func (a *AgentObj) doInit(token *jwt.Token) (err error) {
+	if token != nil {
+		// update info based on jwt data
+		if id := token.Payload().GetString("id"); id != "" {
+			a.id = id
+		}
+		if name := token.Payload().GetString("nam"); name != "" {
+			a.name = name
+		}
+		if div := token.Payload().GetString("loc"); div != "" {
+			a.division = div
+		}
+		if iss := token.Payload().GetString("iss"); iss != "" {
+			a.hostname = iss
+		}
+	}
 
 	a.cert, err = GetInternalCert()
 	if err != nil {

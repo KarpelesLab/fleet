@@ -25,7 +25,7 @@ type Peer struct {
 	valid     bool
 	enc       *gob.Encoder
 
-	write *sync.Mutex
+	write sync.Mutex
 
 	annIdx  uint64
 	numG    uint32
@@ -35,7 +35,7 @@ type Peer struct {
 
 	a *AgentObj
 
-	mutex *sync.RWMutex
+	mutex sync.RWMutex
 	unreg sync.Once
 
 	alive chan interface{}
@@ -72,15 +72,14 @@ func (a *AgentObj) newConn(c net.Conn) {
 
 func (a *AgentObj) handleFleetConn(tc *tls.Conn) {
 	// instanciate peer and fetch certificate
-	p := new(Peer)
-	p.c = tc
-	p.a = a
-	p.cnx = time.Now()
-	p.addr = tc.RemoteAddr().(*net.TCPAddr)
-	p.write = &sync.Mutex{}
-	p.mutex = &sync.RWMutex{}
-	p.alive = make(chan interface{})
-	p.enc = gob.NewEncoder(p.c)
+	p := &Peer{
+		c:     tc,
+		a:     a,
+		cnx:   time.Now(),
+		addr:  tc.RemoteAddr().(*net.TCPAddr),
+		alive: make(chan interface{}),
+		enc:   gob.NewEncoder(tc),
+	}
 	err := p.fetchUuidFromCertificate()
 	if err != nil {
 		log.Printf("[fleet] failed to get peer id: %s", err)

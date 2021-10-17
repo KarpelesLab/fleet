@@ -6,7 +6,6 @@ func Init() {
 	initPath()
 	initDb()
 	initSeed()
-	initAgent()
 	go directoryThread()
 }
 
