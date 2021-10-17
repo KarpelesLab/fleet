@@ -92,6 +92,9 @@ func directoryThread() {
 	if div := jwtInfo.Payload().GetString("loc"); div != "" {
 		Agent.division = div
 	}
+	if iss := jwtInfo.Payload().GetString("iss"); iss != "" {
+		Agent.hostname = iss
+	}
 
 	dir := jwtInfo.Payload().GetString("aud") // Audience
 	if dir == "" {

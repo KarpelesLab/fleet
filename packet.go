@@ -33,7 +33,6 @@ type PacketAnnounce struct {
 	Now  time.Time
 	Idx  uint64
 	NumG uint32 // number of goroutines
-	Ip   string
 	AZ   string
 }
 

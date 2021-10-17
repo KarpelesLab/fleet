@@ -3,16 +3,13 @@ package fleet
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"net"
 	"net/http"
-	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -33,6 +30,7 @@ type AgentObj struct {
 	id       string
 	name     string
 	division string
+	hostname string // only the hostname side
 
 	inCfg  *tls.Config
 	outCfg *tls.Config
@@ -43,8 +41,6 @@ type AgentObj struct {
 
 	peers      map[string]*Peer
 	peersMutex sync.RWMutex
-
-	self JsonFleetHostInfo
 
 	services  map[string]chan net.Conn
 	svcMutex  sync.RWMutex
@@ -70,21 +66,6 @@ func (a *AgentObj) doInit() (err error) {
 
 	a.id = "local"
 	a.name = "local"
-
-	// load fleet info
-	fleet_info, err := ioutil.ReadFile(filepath.Join(initialPath, "fleet.json"))
-	if err != nil {
-		return
-	}
-	// parse json
-	err = json.Unmarshal(fleet_info, &a.self)
-	if err != nil {
-		return
-	}
-
-	a.id = a.self.Id
-	a.name = a.self.Name
-	a.division = a.self.AZ
 
 	a.cert, err = GetInternalCert()
 	if err != nil {
@@ -135,11 +116,7 @@ func (a *AgentObj) Id() string {
 }
 
 func (a *AgentObj) Name() (string, string) {
-	if a.self.Fleet == nil {
-		return a.self.Name, ""
-	} else {
-		return a.self.Name, a.self.Fleet.Hostname
-	}
+	return a.name, a.hostname
 }
 
 func SetRpcEndpoint(e string, f RpcEndpoint) {
@@ -507,8 +484,7 @@ func (a *AgentObj) doAnnounce() {
 		Id:   a.id,
 		Now:  time.Now(),
 		Idx:  x,
-		Ip:   a.self.Ip,
-		AZ:   a.self.AZ,
+		AZ:   a.division,
 		NumG: uint32(runtime.NumGoroutine()),
 	}
 
@@ -623,7 +599,7 @@ func (a *AgentObj) handleAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 
 	if p == nil {
 		// need to establish link
-		go a.dialPeer(ann.Ip, "", ann.Id)
+		//go a.dialPeer(ann.Ip, "", ann.Id)
 		return nil
 	}
 
