@@ -8,11 +8,9 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
-	"io/ioutil"
 	"log"
 	"math/big"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
@@ -149,13 +147,14 @@ func GetCA() (*x509.CertPool, error) {
 
 	if count == 0 {
 		// nothing found in db, check for file?
-		if ca_data, err := ioutil.ReadFile(filepath.Join(initialPath, "internal_ca.pem")); err == nil {
+		err := getFile("internal_ca.pem", func(ca_data []byte) error {
 			ca.AppendCertsFromPEM(ca_data)
 			// store in db
 			err = dbSimpleSet([]byte("global"), []byte("internal:ca:legacy_import"), ca_data)
-			if err == nil {
-				os.Remove(filepath.Join(initialPath, "internal_ca.pem"))
-			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
 		}
 	}
 
