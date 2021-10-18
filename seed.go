@@ -113,7 +113,10 @@ func (s *seedData) WriteToDisk() error {
 }
 
 func SeedTlsConfig(c *tls.Config) {
-	copy(c.SessionTicketKey[:], seed.seed[32:64])
+	var k [32]byte
+	copy(k[:], seed.seed[32:64])
+
+	c.SetSessionTicketKeys([][32]byte{k})
 }
 
 func SeedSign(in []byte) []byte {
