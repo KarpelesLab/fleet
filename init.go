@@ -6,7 +6,7 @@ func Init() {
 	initPath()
 	initDb()
 	initSeed()
-	go directoryThread()
+	directoryThread()
 }
 
 func Shutdown() {

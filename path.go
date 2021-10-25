@@ -12,12 +12,10 @@ import (
 )
 
 var (
-	initialPath string
-	GetFile     func(string) ([]byte, error)
+	GetFile func(string) ([]byte, error)
 )
 
 func initPath() {
-	getInitialPath()
 	if goupd.PROJECT_NAME != "unconfigured" {
 		// chdir to cache
 		c, err := os.UserCacheDir()
@@ -32,23 +30,6 @@ func initPath() {
 		log.Printf("[fleet] set cache dir: %s", c)
 		os.Chdir(c)
 	}
-}
-
-func getInitialPath() {
-	initialPath, _ = os.Getwd()
-	exe, err := os.Executable()
-	if err != nil {
-		log.Printf("[fleet] failed to get executable path: %s", err)
-		return
-	}
-	exe, err = filepath.EvalSymlinks(exe)
-	if err != nil {
-		log.Printf("[fleet] failed to parse executable path: %s", err)
-		return
-	}
-
-	// get directory
-	initialPath = filepath.Dir(exe)
 }
 
 func EnsureDir(c string) error {
@@ -68,14 +49,21 @@ func EnsureDir(c string) error {
 
 func findFile(filename string) (string, error) {
 	// locate file
-	if _, err := os.Stat(filepath.Join(initialPath, filename)); err == nil {
-		return filepath.Join(initialPath, filename), nil
-	}
-
-	if cwd, err := os.Getwd(); err == nil {
-		if _, err = os.Stat(filepath.Join(cwd, filename)); err == nil {
-			return filepath.Join(cwd, filename), nil
+	if exe, err := os.Executable(); err == nil {
+		p := filepath.Join(filepath.Dir(exe), filename)
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
 		}
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		p := filepath.Join(cwd, filename)
+		if _, err = os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+	p := filepath.Join("/etc/fleet", filename)
+	if _, err := os.Stat(p); err == nil {
+		return p, nil
 	}
 
 	return "", fs.ErrNotExist

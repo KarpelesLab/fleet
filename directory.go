@@ -104,14 +104,16 @@ func directoryThread() {
 	}
 	client := &http.Client{Transport: tr}
 
-	for {
-		// connect to directory, ping, etc
-		err = jwtPingDirectory(dir, jwtData, client)
-		if err != nil {
-			log.Printf("[fleet] ping failed: %s", err)
+	go func() {
+		for {
+			// connect to directory, ping, etc
+			err = jwtPingDirectory(dir, jwtData, client)
+			if err != nil {
+				log.Printf("[fleet] ping failed: %s", err)
+			}
+			time.Sleep(60 * time.Second)
 		}
-		time.Sleep(60 * time.Second)
-	}
+	}()
 }
 
 func jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
