@@ -80,14 +80,18 @@ func getFile(filename string, cb func([]byte) error) error {
 
 	fn, err := findFile(filename)
 	if err != nil {
+		log.Printf("[fleet] Failed to locate %s: %s", filename, err)
 		return err
 	}
+	log.Printf("[fleet] located file %s", fn)
 	data, err := ioutil.ReadFile(fn)
 	if err != nil {
+		log.Printf("[fleet] Failed to read %s: %s", filename, err)
 		return err
 	}
 	err = cb(data)
 	if err != nil {
+		log.Printf("[fleet] Failed to perform %s: %s", filename, err)
 		return err
 	}
 	// only remove after success of callback
