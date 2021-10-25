@@ -157,6 +157,10 @@ func dbFleetGet(keyname string) ([]byte, error) {
 
 	// attempt to locate file named a.b for key a:b
 	filename := strings.ReplaceAll(keyname, ":", ".")
+	if strings.HasSuffix(filename, ".crt") {
+		// replace with .pem
+		filename = strings.TrimSuffix(filename, ".crt") + ".pem"
+	}
 
 	err = getFile(filename, func(v []byte) error {
 		data = v
