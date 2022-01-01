@@ -72,7 +72,7 @@ func directoryThreadStart() bool {
 	jwtData, err := dbFleetGet("internal_key:jwt")
 	if err != nil {
 		// attempt to get issuer to give us a key
-		log.Printf("[fleet] directory jwt not found, will retry later")
+		log.Printf("[fleet] failed to load jwt: %s (will retry later)", err)
 		return false
 	}
 
