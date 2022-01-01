@@ -84,7 +84,8 @@ func SetIssuer(url string) {
 
 		// Pass "sig" in header
 		req, err := http.NewRequest("POST", url, bytes.NewReader(bodyBin))
-		req.Header.Add("Sec-Body-Signature", base64.RawURLEncoding.EncodeToString(sig))
+		req.Header.Set("Sec-Body-Signature", base64.RawURLEncoding.EncodeToString(sig))
+		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
