@@ -1,6 +1,7 @@
 package fleet
 
 import (
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -8,6 +9,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"log"
 	"math/big"
 	"os"
@@ -15,6 +17,45 @@ import (
 
 	"github.com/google/uuid"
 )
+
+func getLocalKey() (crypto.Signer, error) {
+	keyPem, err := dbFleetGet("internal_key:key")
+	if err != nil {
+		// gen & save a new key
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate local key: %w", err)
+		}
+		// encode to DER
+		key_der, err := x509.MarshalPKCS8PrivateKey(key)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal pkcs8 key: %w", err)
+		}
+		// encode to PEM
+		key_pem := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: key_der})
+		// store in DB
+		dbSimpleSet([]byte("fleet"), []byte("internal_key:key"), key_pem)
+
+		return key, nil
+	}
+
+	// decode PEM key
+	pdata, _ := pem.Decode(keyPem)
+	if pdata == nil || pdata.Type != "PRIVATE KEY" {
+		return nil, errors.New("invalid private key in internal_key:key")
+	}
+
+	// parse pkcs8
+	keyIntf, err := x509.ParsePKCS8PrivateKey(pdata.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("while decoding pkcs8 key: %w", err)
+	}
+	if key, ok := keyIntf.(crypto.Signer); ok {
+		return key, nil
+	}
+	// should not happen
+	return nil, fmt.Errorf("failed to convert key type %T into crypto.Signer", keyIntf)
+}
 
 func GenInternalCert() (tls.Certificate, error) {
 	log.Printf("[tls] Generating new CA & client certificates")
@@ -24,8 +65,8 @@ func GenInternalCert() (tls.Certificate, error) {
 		return tls.Certificate{}, err
 	}
 
-	// generate key
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	// get key
+	key, err := getLocalKey()
 	if err != nil {
 		return tls.Certificate{}, err
 	}
@@ -75,24 +116,17 @@ func GenInternalCert() (tls.Certificate, error) {
 		return tls.Certificate{}, err
 	}
 
-	key_der, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		return tls.Certificate{}, err
-	}
-
 	// store stuff as PEM
 	ca_crt_pem := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca_crt_der})
 	crt_pem := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: crt_der})
 	ca_key_pem := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: ca_key_der})
-	key_pem := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: key_der})
 
 	// store
 	dbSimpleSet([]byte("fleet"), []byte("internal_key:crt"), crt_pem)
-	dbSimpleSet([]byte("fleet"), []byte("internal_key:key"), key_pem)
 	dbSimpleSet([]byte("global"), []byte("internal:ca:master"), ca_crt_pem)
 	dbSimpleSet([]byte("fleet"), []byte("ca_key:key"), ca_key_pem)
 
-	log.Printf("[tls] New certificate: %s%s%s%s", ca_crt_pem, ca_key_pem, crt_pem, key_pem)
+	log.Printf("[tls] New certificate: %s%s%s", ca_crt_pem, ca_key_pem, crt_pem)
 
 	return tls.Certificate{Certificate: [][]byte{crt_der}, PrivateKey: key}, nil
 }

@@ -43,6 +43,23 @@ type directoryPingResponse struct {
 }
 
 func directoryThread() {
+	if directoryThreadStart() {
+		return
+	}
+
+	go func() {
+		for {
+			// wait
+			time.Sleep(15 * time.Minute)
+			// and retry
+			if directoryThreadStart() {
+				return
+			}
+		}
+	}()
+}
+
+func directoryThreadStart() bool {
 	// this is run in its own gorouting after db is setup
 	defer func() {
 		// ensure this thread crashing doesn't take the whole process
@@ -54,32 +71,33 @@ func directoryThread() {
 	// attempt to load jwt
 	jwtData, err := dbFleetGet("internal_key:jwt")
 	if err != nil {
-		log.Printf("[fleet] directory jwt not found, disabling directory registration")
-		return
+		// attempt to get issuer to give us a key
+		log.Printf("[fleet] directory jwt not found, will retry later")
+		return false
 	}
 
 	// decode jwt
 	jwtInfo, err := jwt.ParseString(string(jwtData))
 	if err != nil {
 		log.Printf("[fleet] failed to decode jwt: %s", err)
-		return
+		return false
 	}
 	// our tokens have the actual key stored in kid
 	key, err := base64.RawURLEncoding.DecodeString(jwtInfo.GetKeyId())
 	if err != nil {
 		log.Printf("[fleet] failed to decode kid: %s", err)
-		return
+		return false
 	}
 	keyObj, err := x509.ParsePKIXPublicKey(key)
 	if err != nil {
 		log.Printf("[fleet] failed to parse jwt key: %s", err)
-		return
+		return false
 	}
 	// keyObj is a *rsa.PublicKey, *dsa.PublicKey, *ecdsa.PublicKey, or ed25519.PublicKey
 	err = jwtInfo.Verify(jwt.VerifySignature(keyObj), jwt.VerifyTime(time.Now(), false))
 	if err != nil {
 		log.Printf("[fleet] failed to verify jwt: %s", err)
-		return
+		return false
 	}
 
 	initAgent(jwtInfo)
@@ -87,14 +105,14 @@ func directoryThread() {
 	dir := jwtInfo.Payload().GetString("aud") // Audience
 	if dir == "" {
 		log.Printf("[fleet] directory failed to load: aud claim not found")
-		return
+		return false
 	}
 
 	// jwt contains our jwt token, load the certificate too
 	cfg, err := GetClientTlsConfig()
 	if err != nil {
 		log.Printf("[fleet] failed to get client TLS certificate, directory service disabled: %s", err)
-		return
+		return false
 	}
 
 	tr := &http.Transport{
@@ -114,6 +132,7 @@ func directoryThread() {
 			time.Sleep(60 * time.Second)
 		}
 	}()
+	return true
 }
 
 func jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {

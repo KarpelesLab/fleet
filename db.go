@@ -166,6 +166,10 @@ func dbFleetGet(keyname string) ([]byte, error) {
 		data = v
 		return dbSimpleSet([]byte("fleet"), []byte(keyname), v)
 	})
+	if err == nil {
+		return data, nil
+	}
+
 	return data, err
 }
 
