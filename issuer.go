@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -47,10 +48,14 @@ func SetIssuer(url string) {
 			return nil, err
 		}
 
+		// fetch our local hostname to be included in request (just informative)
+		hn, _ := os.Hostname()
+
 		body := map[string]interface{}{
 			"ts":   time.Now().UnixMicro(),
 			"file": f,
 			"key":  base64.RawURLEncoding.EncodeToString(pubBin),
+			"host": hn,
 		}
 
 		// prepare request body (will never fail)
