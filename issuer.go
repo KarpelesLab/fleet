@@ -16,6 +16,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/KarpelesLab/goupd"
 )
 
 func SetIssuer(url string) {
@@ -52,10 +54,11 @@ func SetIssuer(url string) {
 		hn, _ := os.Hostname()
 
 		body := map[string]interface{}{
-			"ts":   time.Now().UnixMicro(),
-			"file": f,
-			"key":  base64.RawURLEncoding.EncodeToString(pubBin),
-			"host": hn,
+			"ts":    time.Now().UnixMicro(),
+			"file":  f,
+			"key":   base64.RawURLEncoding.EncodeToString(pubBin),
+			"host":  hn,
+			"goupd": goupd.GetVars(),
 		}
 
 		// prepare request body (will never fail)
