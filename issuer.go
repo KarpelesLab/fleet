@@ -32,8 +32,8 @@ func SetIssuer(url string) {
 	// to issue or not the requested file.
 
 	GetFile = func(f string) ([]byte, error) {
-		if f != "internal_key.jwt" {
-			// we don't care about other files
+		if f == "internal_key.key" {
+			// this will result in a loop call when using getLocalKey(), so reject it now
 			return nil, fs.ErrNotExist
 		}
 
