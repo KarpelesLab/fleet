@@ -14,6 +14,9 @@ func init() {
 	gob.Register(&PacketRpcResponse{})
 	gob.Register(&PacketDbRecord{})
 	gob.Register(DbStamp{})
+	gob.Register(&PacketDbVersions{})
+	gob.Register(&PacketDbVersionsEntry{})
+	gob.Register(&PacketDbRequest{})
 }
 
 type Packet interface{}
@@ -70,4 +73,23 @@ type PacketDbRecord struct {
 	Stamp    DbStamp
 	Bucket   []byte // typically "app"
 	Key, Val []byte
+}
+
+// PacketDbVersions signals what records are available in a peer, typically sent on connection established
+type PacketDbVersions struct {
+	Info []*PacketDbVersionsEntry
+}
+
+type PacketDbVersionsEntry struct {
+	Stamp  DbStamp
+	Bucket []byte // typically "app"
+	Key    []byte
+}
+
+// PacketDbRequest requests a specific record, response will be a PacketDbRecord
+type PacketDbRequest struct {
+	TargetId string
+	SourceId string
+	Bucket   []byte // typically "app"
+	Key      []byte
 }

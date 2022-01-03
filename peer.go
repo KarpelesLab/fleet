@@ -191,6 +191,20 @@ func (p *Peer) handlePacket(pktI interface{}) error {
 		}
 		// let the db handle that
 		return feedDbSet(pkt.Bucket, pkt.Key, pkt.Val, pkt.Stamp)
+	case *PacketDbRequest:
+		if pkt.TargetId != p.a.id {
+			// fw
+			return p.a.SendTo(pkt.TargetId, pkt)
+		}
+		// grab from db
+		return p.handleDbRequest(pkt)
+	case *PacketDbVersions:
+		for _, v := range pkt.Info {
+			if needDbEntry(v.Bucket, v.Key, v.Stamp) {
+				p.Send(&PacketDbRequest{TargetId: p.id, SourceId: p.a.id, Bucket: v.Bucket, Key: v.Key})
+			}
+		}
+		return nil
 	default:
 		return errors.New("unsupported packet")
 	}
@@ -220,6 +234,26 @@ func (p *Peer) processAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 func (p *Peer) handlePong(pong *PacketPong) {
 	// store pong info
 	p.Ping = time.Since(pong.Now)
+}
+
+func (p *Peer) handleDbRequest(pkt *PacketDbRequest) error {
+	val, stamp, err := dbGetVersion([]byte(pkt.Bucket), []byte(pkt.Key))
+	if err != nil {
+		// ignore it
+		return nil
+	}
+
+	// send response
+	res := &PacketDbRecord{
+		TargetId: pkt.SourceId,
+		SourceId: p.a.id,
+		Stamp:    stamp,
+		Bucket:   pkt.Bucket,
+		Key:      pkt.Key,
+		Val:      val,
+	}
+
+	return p.Send(res)
 }
 
 func (p *Peer) fetchUuidFromCertificate() error {
@@ -309,5 +343,6 @@ func (p *Peer) sendHandshake() error {
 	if err != nil {
 		return err
 	}
+	p.Send(databasePacket())
 	return p.Send(seedPacket())
 }

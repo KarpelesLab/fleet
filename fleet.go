@@ -573,7 +573,7 @@ func (a *AgentObj) DumpInfo(w io.Writer) {
 
 	fmt.Fprintf(w, "\n")
 	fmt.Fprintf(w, "DB keys:\n")
-	for _, bk := range []string{"fleet", "global"} {
+	for _, bk := range []string{"fleet", "global", "app"} {
 		var l []string
 		if c, err := NewDbCursor([]byte(bk)); err == nil {
 			defer c.Close()
