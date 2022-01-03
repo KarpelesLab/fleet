@@ -85,11 +85,8 @@ func feedDbSet(bucket, key, val []byte, v DbStamp) error {
 	fk := append(append(bucket, 0), key...)
 	// check version
 	curV, err := dbSimpleGet([]byte("version"), fk)
-	if err != nil {
-		return err
-	}
-	// decode curV
-	if len(curV) > 0 {
+	if err == nil && len(curV) > 0 {
+		// decode curV
 		var curVT DbStamp
 		err = curVT.UnmarshalBinary(curV)
 		if err != nil {
