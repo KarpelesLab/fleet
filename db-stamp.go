@@ -35,7 +35,7 @@ func (t DbStamp) MarshalBinary() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = binary.Write(&b, binary.BigEndian, time.Time(t).UnixNano())
+	err = binary.Write(&b, binary.BigEndian, int64(time.Time(t).Nanosecond()))
 	if err != nil {
 		return nil, err
 	}
