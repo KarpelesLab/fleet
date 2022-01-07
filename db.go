@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/KarpelesLab/goupd"
 	bolt "go.etcd.io/bbolt"
@@ -18,7 +19,13 @@ import (
 // any node can ask to replay changes done to the db since any point in time, including zero
 // timestamp for keys are stored in 2x int64 (second, nanosecond), as bigendian when serialized
 
-var db *bolt.DB
+type DbWatchCallback func(string, []byte)
+
+var (
+	db          *bolt.DB
+	dbWatch     = make(map[string]DbWatchCallback)
+	dbWatchLock sync.RWMutex
+)
 
 func initDb() {
 	// Open the Bolt database located in the config directory
@@ -43,6 +50,29 @@ func DbGet(key string) (string, error) {
 // simple db set for program usage
 func DbSet(key string, value []byte) error {
 	return feedDbSetBC([]byte("app"), []byte(key), value, DbNow())
+}
+
+// DbWatch will trigger the cb function upon updates of the given key
+// Special key "*" covers all keys (can only be one callback for a key)
+func DbWatch(key string, cb func(string, []byte)) {
+	dbWatchLock.Lock()
+	defer dbWatchLock.Unlock()
+
+	dbWatch[key] = cb
+}
+
+func dbWatchTrigger(key string, val []byte) {
+	dbWatchLock.RLock()
+	cb1, ok1 := dbWatch[key]
+	cb2, ok2 := dbWatch["*"]
+	dbWatchLock.RUnlock()
+
+	if ok1 {
+		cb1(key, val)
+	}
+	if ok2 {
+		cb2(key, val)
+	}
 }
 
 func feedDbSetBC(bucket, key, val []byte, v DbStamp) error {
@@ -100,7 +130,7 @@ func feedDbSet(bucket, key, val []byte, v DbStamp) error {
 	}
 
 	// update
-	return db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *bolt.Tx) error {
 		vb, err := tx.CreateBucketIfNotExists([]byte("version"))
 		if err != nil {
 			return err
@@ -136,6 +166,8 @@ func feedDbSet(bucket, key, val []byte, v DbStamp) error {
 
 		return b.Put(key, val)
 	})
+	go dbWatchTrigger(string(key), val)
+	return err
 }
 
 func dbGetVersion(bucket, key []byte) (val []byte, stamp DbStamp, err error) {
