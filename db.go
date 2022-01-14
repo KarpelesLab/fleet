@@ -239,6 +239,17 @@ func dbSimpleSet(bucket, key, val []byte) error {
 	})
 }
 
+// internal delete
+func dbSimpleDel(bucket, key []byte) error {
+	return db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bucket)
+		if b == nil {
+			return nil
+		}
+		return b.Delete(key)
+	})
+}
+
 // internal getter
 func dbSimpleGet(bucket, key []byte) (r []byte, err error) {
 	err = db.View(func(tx *bolt.Tx) error {
@@ -281,6 +292,11 @@ func dbFleetGet(keyname string) ([]byte, error) {
 	}
 
 	return data, err
+}
+
+func dbFleetDel(keyname string) error {
+	// for example keyname="internal_key:jwt"
+	return dbSimpleDel([]byte("fleet"), []byte(keyname))
 }
 
 type DbCursor struct {

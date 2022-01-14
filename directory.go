@@ -91,12 +91,16 @@ func directoryThreadStart() bool {
 	keyObj, err := x509.ParsePKIXPublicKey(key)
 	if err != nil {
 		log.Printf("[fleet] failed to parse jwt key: %s", err)
+		log.Printf("[fleet] removing invalid jwt from database")
+		dbFleetDel("internal_key:jwt")
 		return false
 	}
 	// keyObj is a *rsa.PublicKey, *dsa.PublicKey, *ecdsa.PublicKey, or ed25519.PublicKey
 	err = jwtInfo.Verify(jwt.VerifySignature(keyObj), jwt.VerifyTime(time.Now(), false))
 	if err != nil {
 		log.Printf("[fleet] failed to verify jwt: %s", err)
+		log.Printf("[fleet] removing invalid jwt from database")
+		dbFleetDel("internal_key:jwt")
 		return false
 	}
 
