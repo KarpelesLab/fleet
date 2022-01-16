@@ -97,6 +97,7 @@ func (a *AgentObj) handleFleetConn(tc *tls.Conn) {
 	p.valid = true
 	p.register()
 	p.sendHandshake()
+	p.annTime = time.Now()
 	go p.loop()
 	go p.monitor()
 }
