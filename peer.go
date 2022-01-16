@@ -110,6 +110,8 @@ func (p *Peer) loop() {
 	// read from peer
 	dec := gob.NewDecoder(p.c)
 	var pkt Packet
+	defer p.unregister()
+	defer p.c.Close()
 
 	for {
 		err := dec.Decode(&pkt)
@@ -124,13 +126,13 @@ func (p *Peer) loop() {
 				go p.retryLater(10 * time.Second)
 			}
 
-			p.c.Close()
-			p.unregister()
-
 			return
 		}
 
-		p.handlePacket(pkt)
+		err = p.handlePacket(pkt)
+		if err != nil {
+			log.Printf("[fleet] failed handling packet from %s: %s", p.id, err)
+		}
 	}
 }
 
