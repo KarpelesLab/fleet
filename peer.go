@@ -117,7 +117,7 @@ func (p *Peer) loop() {
 		err := dec.Decode(&pkt)
 		if err != nil {
 			if err == io.EOF {
-				log.Printf("[fleet] disconnected peer %s", p.id)
+				log.Printf("[fleet] disconnected peer %s (received EOF)", p.id)
 			} else {
 				log.Printf("[fleet] failed to read from peer %s: %s", p.id, err)
 			}
