@@ -225,12 +225,13 @@ func (p *Peer) handlePacket(pktI interface{}) error {
 }
 
 func (p *Peer) processAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
-	if ann.Idx <= p.annIdx {
-		return nil
-	}
-
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
+
+	if ann.Idx <= p.annIdx {
+		// already seen this announce, ignore it
+		return nil
+	}
 
 	p.annIdx = ann.Idx
 	p.annTime = ann.Now
