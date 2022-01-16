@@ -241,7 +241,7 @@ func (p *Peer) processAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 	p.a.SendTo(ann.Id, &PacketPong{TargetId: ann.Id, SourceId: p.a.id, Now: ann.Now})
 
 	// broadcast
-	p.a.doBroadcast(ann, fromPeer.id)
+	//p.a.doBroadcast(ann, fromPeer.id)
 
 	return nil
 }
