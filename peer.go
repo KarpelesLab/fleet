@@ -201,7 +201,9 @@ func (p *Peer) handlePacket(pktI interface{}) error {
 	case *PacketDbVersions:
 		for _, v := range pkt.Info {
 			if needDbEntry(v.Bucket, v.Key, v.Stamp) {
-				p.Send(&PacketDbRequest{TargetId: p.id, SourceId: p.a.id, Bucket: v.Bucket, Key: v.Key})
+				if err := p.Send(&PacketDbRequest{TargetId: p.id, SourceId: p.a.id, Bucket: v.Bucket, Key: v.Key}); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
@@ -298,7 +300,7 @@ func (p *Peer) Send(pkt Packet) error {
 		log.Printf("[fleet] Write to peer failed: %s", err)
 		p.c.Close()
 	}
-	return nil
+	return err
 }
 
 func (p *Peer) register() {
