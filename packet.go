@@ -17,6 +17,7 @@ func init() {
 	gob.Register(&PacketDbVersions{})
 	gob.Register(&PacketDbVersionsEntry{})
 	gob.Register(&PacketDbRequest{})
+	gob.Register(&PacketClose{})
 }
 
 type Packet interface{}
@@ -92,4 +93,8 @@ type PacketDbRequest struct {
 	SourceId string
 	Bucket   []byte // typically "app"
 	Key      []byte
+}
+
+type PacketClose struct {
+	Reason string
 }

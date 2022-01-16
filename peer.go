@@ -131,6 +131,13 @@ func (p *Peer) loop() {
 
 		err = p.handlePacket(pkt)
 		if err != nil {
+			if err == io.EOF {
+				// closed connection
+				if p.valid {
+					go p.retryLater(10 * time.Second)
+				}
+				return
+			}
 			log.Printf("[fleet] failed handling packet from %s: %s", p.id, err)
 		}
 	}
@@ -142,11 +149,11 @@ func (p *Peer) monitor() {
 	for {
 		select {
 		case <-p.alive:
-			p.c.Close()
+			p.Close("alive channel closed")
 			return
 		case <-t.C:
 			if time.Since(p.annTime) > time.Minute {
-				p.c.Close()
+				p.Close("announce time timeout")
 				p.unregister()
 				return
 			}
@@ -209,6 +216,9 @@ func (p *Peer) handlePacket(pktI interface{}) error {
 			}
 		}
 		return nil
+	case *PacketClose:
+		log.Printf("[fleet] Closed connection to peer %s: %s", p.id, pkt.Reason)
+		return io.EOF
 	default:
 		return errors.New("unsupported packet")
 	}
@@ -305,6 +315,14 @@ func (p *Peer) Send(pkt Packet) error {
 	return err
 }
 
+func (p *Peer) Close(reason string) error {
+	err := p.Send(&PacketClose{Reason: reason})
+	if err != nil {
+		return err
+	}
+	return p.c.Close()
+}
+
 func (p *Peer) register() {
 	a := p.a
 	a.peersMutex.Lock()
@@ -312,7 +330,7 @@ func (p *Peer) register() {
 
 	old, ok := a.peers[p.id]
 	if ok {
-		old.c.Close()
+		go old.Close("new connection for same peer")
 	}
 
 	a.peers[p.id] = p
