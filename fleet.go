@@ -142,8 +142,8 @@ func SetRpcEndpoint(e string, f RpcEndpoint) {
 	rpcE[e] = f
 }
 
-// func(interface{}) (interface{}, error)
-func TriggerRpcEndpoint(e string, p interface{}) (interface{}, error) {
+// CallRpcEndpoint will call the named RPC endpoint on the local machine
+func CallRpcEndpoint(e string, p interface{}) (interface{}, error) {
 	if rpcE == nil {
 		return nil, fs.ErrNotExist
 	}
