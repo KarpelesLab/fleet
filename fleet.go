@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"math/rand"
 	"net"
@@ -139,6 +140,19 @@ func SetRpcEndpoint(e string, f RpcEndpoint) {
 		rpcE = make(map[string]RpcEndpoint)
 	}
 	rpcE[e] = f
+}
+
+// func(interface{}) (interface{}, error)
+func TriggerRpcEndpoint(e string, p interface{}) (interface{}, error) {
+	if rpcE == nil {
+		return nil, fs.ErrNotExist
+	}
+	ep, ok := rpcE[e]
+	if !ok {
+		return nil, fs.ErrNotExist
+	}
+
+	return ep(p)
 }
 
 func (a *AgentObj) BroadcastRpc(endpoint string, data interface{}) error {
