@@ -24,7 +24,6 @@ type Peer struct {
 	division  string
 	addr      *net.TCPAddr
 	valid     bool
-	enc       *gob.Encoder
 
 	sendQueue chan Packet
 
@@ -82,8 +81,8 @@ func (a *AgentObj) handleFleetConn(tc *tls.Conn) {
 		addr:      tc.RemoteAddr().(*net.TCPAddr),
 		alive:     make(chan struct{}),
 		aliveTime: time.Now(),
-		enc:       gob.NewEncoder(tc),
-		sendQueue: make(chan Packet, 128),
+		annTime:   time.Now(),
+		sendQueue: make(chan Packet, 32),
 		valid:     true,
 	}
 	err := p.fetchUuidFromCertificate()
@@ -314,14 +313,14 @@ func (p *Peer) fetchUuidFromCertificate() error {
 }
 
 func (p *Peer) Send(ctx context.Context, pkt Packet) error {
-	log.Printf("[debug] sending packet %T to %s with context", pkt, p.id)
+	//log.Printf("[debug] sending packet %T to %s with context", pkt, p.id)
 
 	select {
 	case <-p.alive:
-		log.Printf("[debug] sending packet to %s failed: connection closed", p.id)
+		log.Printf("[fleet] sending packet to %s failed: connection closed", p.id)
 		return ErrConnectionClosed
 	case <-ctx.Done():
-		log.Printf("[debug] sending packet to %s failed: queue full and timeout reached", p.id)
+		log.Printf("[fleet] sending packet to %s failed: queue full and timeout reached", p.id)
 		return ctx.Err()
 	case p.sendQueue <- pkt:
 		return nil
@@ -329,11 +328,11 @@ func (p *Peer) Send(ctx context.Context, pkt Packet) error {
 }
 
 func (p *Peer) TrySend(pkt Packet) error {
-	log.Printf("[debug] sending packet %T to %s", pkt, p.id)
+	//log.Printf("[debug] sending packet %T to %s", pkt, p.id)
 
 	select {
 	case <-p.alive:
-		log.Printf("[debug] sending packet to %s failed: connection closed", p.id)
+		log.Printf("[fleet] sending packet to %s failed: connection closed", p.id)
 		return ErrConnectionClosed
 	case p.sendQueue <- pkt:
 		return nil
@@ -345,6 +344,7 @@ func (p *Peer) TrySend(pkt Packet) error {
 func (p *Peer) writeLoop() {
 	defer p.c.Close()
 	t := time.NewTicker(5 * time.Second)
+	enc := gob.NewEncoder(p.c)
 
 	for {
 		select {
@@ -356,13 +356,13 @@ func (p *Peer) writeLoop() {
 			pkt = &PacketAlive{
 				Now: now,
 			}
-			err := p.enc.Encode(&pkt)
+			err := enc.Encode(&pkt)
 			if err != nil {
 				log.Printf("[fleet] Write to peer failed: %s", err)
 				return
 			}
 		case pkt := <-p.sendQueue:
-			err := p.enc.Encode(&pkt)
+			err := enc.Encode(&pkt)
 			if err != nil {
 				log.Printf("[fleet] Write to peer failed: %s", err)
 				return

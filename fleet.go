@@ -472,7 +472,7 @@ func (a *AgentObj) dialPeer(host, name string, id string) {
 		return
 	}
 
-	a.newConn(c)
+	go a.newConn(c)
 }
 
 func (a *AgentObj) IsConnected(id string) bool {
