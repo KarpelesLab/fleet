@@ -638,7 +638,7 @@ func (a *AgentObj) handleAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 func (a *AgentObj) SendTo(target string, pkt interface{}) error {
 	p := a.GetPeer(target) // TODO find best route instead of using GetPeer
 	if p == nil {
-		return errors.New("no route to peer")
+		return ErrPeerNoRoute
 	}
 
 	return p.Send(pkt)

@@ -25,7 +25,7 @@ type Peer struct {
 	valid     bool
 	enc       *gob.Encoder
 
-	write sync.Mutex
+	sendQueue chan Packet
 
 	annIdx  uint64
 	numG    uint32
@@ -73,12 +73,13 @@ func (a *AgentObj) newConn(c net.Conn) {
 func (a *AgentObj) handleFleetConn(tc *tls.Conn) {
 	// instanciate peer and fetch certificate
 	p := &Peer{
-		c:     tc,
-		a:     a,
-		cnx:   time.Now(),
-		addr:  tc.RemoteAddr().(*net.TCPAddr),
-		alive: make(chan interface{}),
-		enc:   gob.NewEncoder(tc),
+		c:         tc,
+		a:         a,
+		cnx:       time.Now(),
+		addr:      tc.RemoteAddr().(*net.TCPAddr),
+		alive:     make(chan interface{}),
+		enc:       gob.NewEncoder(tc),
+		sendQueue: make(chan Packet, 10),
 	}
 	err := p.fetchUuidFromCertificate()
 	if err != nil {
@@ -99,6 +100,7 @@ func (a *AgentObj) handleFleetConn(tc *tls.Conn) {
 	p.sendHandshake()
 	p.annTime = time.Now()
 	go p.loop()
+	go p.writeLoop()
 	go p.monitor()
 }
 
@@ -305,16 +307,29 @@ func (p *Peer) fetchUuidFromCertificate() error {
 }
 
 func (p *Peer) Send(pkt Packet) error {
-	// use mutex here to avoid multiple writes to overlap
-	p.write.Lock()
-	defer p.write.Unlock()
-
-	err := p.enc.Encode(&pkt)
-	if err != nil {
-		log.Printf("[fleet] Write to peer failed: %s", err)
-		p.c.Close()
+	select {
+	case p.sendQueue <- pkt:
+		return nil
+	default:
+		return ErrWriteQueueFull
 	}
-	return err
+}
+
+func (p *Peer) writeLoop() {
+	defer p.c.Close()
+	for {
+		select {
+		case <-p.alive:
+			// closed channel
+			return
+		case pkt := <-p.sendQueue:
+			err := p.enc.Encode(pkt)
+			if err != nil {
+				log.Printf("[fleet] Write to peer failed: %s", err)
+				return
+			}
+		}
+	}
 }
 
 func (p *Peer) Close(reason string) error {
@@ -340,6 +355,8 @@ func (p *Peer) register() {
 
 func (p *Peer) unregister() {
 	p.unreg.Do(func() {
+		close(p.alive) // no more alive
+
 		a := p.a
 
 		a.peersMutex.Lock()
@@ -349,8 +366,6 @@ func (p *Peer) unregister() {
 		if ok && old == p {
 			delete(a.peers, p.id)
 		}
-
-		close(p.alive) // no more alive
 	})
 }
 
