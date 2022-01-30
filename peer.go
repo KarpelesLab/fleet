@@ -336,7 +336,8 @@ func (p *Peer) writeLoop() {
 			// closed channel
 			return
 		case now := <-t.C:
-			pkt := &PacketAlive{
+			var pkt Packet
+			pkt = &PacketAlive{
 				Now: now,
 			}
 			err := p.enc.Encode(&pkt)
