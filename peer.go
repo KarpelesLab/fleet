@@ -356,6 +356,7 @@ func (p *Peer) writeLoop() {
 }
 
 func (p *Peer) Close(reason string) error {
+	log.Printf("[fleet] Closing connection to %s: %s", p.id, reason)
 	err := p.Send(&PacketClose{Reason: reason})
 	if err != nil {
 		return err
