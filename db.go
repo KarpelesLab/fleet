@@ -2,6 +2,7 @@ package fleet
 
 import (
 	"bytes"
+	"context"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -79,7 +80,7 @@ func feedDbSetBC(bucket, key, val []byte, v DbStamp) error {
 	if err := feedDbSet(bucket, key, val, v); err != nil {
 		return err
 	}
-	Agent.broadcastDbRecord(bucket, key, val, v)
+	Agent.broadcastDbRecord(context.Background(), bucket, key, val, v)
 	return nil
 }
 

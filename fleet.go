@@ -1,6 +1,7 @@
 package fleet
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -155,7 +156,7 @@ func CallRpcEndpoint(e string, p interface{}) (interface{}, error) {
 	return ep(p)
 }
 
-func (a *AgentObj) BroadcastRpc(endpoint string, data interface{}) error {
+func (a *AgentObj) BroadcastRpc(ctx context.Context, endpoint string, data interface{}) error {
 	// send request
 	pkt := &PacketRpc{
 		SourceId: a.id,
@@ -179,13 +180,13 @@ func (a *AgentObj) BroadcastRpc(endpoint string, data interface{}) error {
 		pkt2 := &PacketRpc{}
 		*pkt2 = *pkt
 		pkt2.TargetId = p.id
-		go p.Send(pkt2)
+		go p.Send(ctx, pkt2)
 	}
 
 	return nil
 }
 
-func (a *AgentObj) broadcastDbRecord(bucket, key, val []byte, v DbStamp) error {
+func (a *AgentObj) broadcastDbRecord(ctx context.Context, bucket, key, val []byte, v DbStamp) error {
 	pkt := &PacketDbRecord{
 		SourceId: a.id,
 		Stamp:    v,
@@ -210,7 +211,7 @@ func (a *AgentObj) broadcastDbRecord(bucket, key, val []byte, v DbStamp) error {
 		pkt2 := &PacketDbRecord{}
 		*pkt2 = *pkt
 		pkt2.TargetId = p.id
-		go p.Send(pkt2)
+		go p.Send(ctx, pkt2)
 	}
 
 	return nil
@@ -221,7 +222,7 @@ type rpcChoiceStruct struct {
 	peer     *Peer
 }
 
-func (a *AgentObj) AnyRpc(division string, endpoint string, data interface{}) error {
+func (a *AgentObj) AnyRpc(ctx context.Context, division string, endpoint string, data interface{}) error {
 	// send request
 	pkt := &PacketRpc{
 		SourceId: a.id,
@@ -255,14 +256,14 @@ func (a *AgentObj) AnyRpc(division string, endpoint string, data interface{}) er
 		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
 		pkt.TargetId = i.peer.id
 		atomic.AddUint32(&i.peer.numG, 1) // increment value to avoid sending bursts to the same node
-		go i.peer.Send(pkt)
+		go i.peer.Send(ctx, pkt)
 		return nil
 	}
 
 	return errors.New("no peer available")
 }
 
-func (a *AgentObj) DivisionRpc(division int, endpoint string, data interface{}) error {
+func (a *AgentObj) DivisionRpc(ctx context.Context, division int, endpoint string, data interface{}) error {
 	divMatch := a.division
 	if division > 0 {
 		// only keep the N first parts of divison. Eg if N=2 and "divMatch" is "a/b/c", divMatch should become "a/b/"
@@ -304,10 +305,10 @@ func (a *AgentObj) DivisionRpc(division int, endpoint string, data interface{}) 
 		}
 	}
 
-	return a.DivisionPrefixRpc(divMatch, endpoint, data)
+	return a.DivisionPrefixRpc(ctx, divMatch, endpoint, data)
 }
 
-func (a *AgentObj) DivisionPrefixRpc(divMatch string, endpoint string, data interface{}) error {
+func (a *AgentObj) DivisionPrefixRpc(ctx context.Context, divMatch string, endpoint string, data interface{}) error {
 	// send request
 	pkt := &PacketRpc{
 		SourceId: a.id,
@@ -334,13 +335,13 @@ func (a *AgentObj) DivisionPrefixRpc(divMatch string, endpoint string, data inte
 		pkt2 := &PacketRpc{}
 		*pkt2 = *pkt
 		pkt2.TargetId = p.id
-		go p.Send(pkt2)
+		go p.Send(ctx, pkt2)
 	}
 
 	return nil
 }
 
-func (a *AgentObj) RPC(id string, endpoint string, data interface{}) (interface{}, error) {
+func (a *AgentObj) RPC(ctx context.Context, id string, endpoint string, data interface{}) (interface{}, error) {
 	p := a.GetPeer(id)
 	if p == nil {
 		return nil, errors.New("Failed to find peer")
@@ -361,25 +362,28 @@ func (a *AgentObj) RPC(id string, endpoint string, data interface{}) (interface{
 		Data:     data,
 	}
 
-	p.Send(pkt)
+	p.Send(ctx, pkt)
 
 	// get response
-	r := <-res
+	select {
+	case r := <-res:
+		a.rpcL.Lock()
+		delete(a.rpc, resId)
+		a.rpcL.Unlock()
 
-	a.rpcL.Lock()
-	delete(a.rpc, resId)
-	a.rpcL.Unlock()
+		if r == nil {
+			return nil, errors.New("failed to wait for response")
+		}
 
-	if r == nil {
-		return nil, errors.New("failed to wait for response")
+		err := error(nil)
+		if r.HasError {
+			err = errors.New(r.Error)
+		}
+
+		return r.Data, err
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
-
-	err := error(nil)
-	if r.HasError {
-		err = errors.New(r.Error)
-	}
-
-	return r.Data, err
 }
 
 func (a *AgentObj) handleRpc(pkt *PacketRpc) error {
@@ -389,11 +393,13 @@ func (a *AgentObj) handleRpc(pkt *PacketRpc) error {
 		R:        pkt.R,
 	}
 
+	ctx := context.Background()
+
 	if rpcE == nil {
 		if pkt.R != 0 {
 			res.Error = "RPC: endpoint system not enabled (no endpoints)"
 			res.HasError = true
-			return a.SendTo(res.TargetId, res)
+			return a.SendTo(ctx, res.TargetId, res)
 		}
 		return nil
 	}
@@ -404,7 +410,7 @@ func (a *AgentObj) handleRpc(pkt *PacketRpc) error {
 		if pkt.R != 0 {
 			res.Error = "RPC: endpoint not found"
 			res.HasError = true
-			return a.SendTo(res.TargetId, res)
+			return a.SendTo(ctx, res.TargetId, res)
 		}
 		return nil
 	}
@@ -439,7 +445,7 @@ func (a *AgentObj) handleRpc(pkt *PacketRpc) error {
 		}
 	}()
 
-	return a.SendTo(res.TargetId, res)
+	return a.SendTo(ctx, res.TargetId, res)
 }
 
 func (a *AgentObj) dialPeer(host, name string, id string) {
@@ -517,13 +523,22 @@ func (a *AgentObj) doAnnounce() {
 		NumG: uint32(runtime.NumGoroutine()),
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var wg sync.WaitGroup
+
 	for _, p := range a.peers {
 		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
-		go p.Send(pkt)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			p.Send(ctx, pkt)
+		}()
 	}
+	wg.Wait()
 }
 
-func (a *AgentObj) doBroadcast(pkt Packet, except_id string) {
+func (a *AgentObj) doBroadcast(ctx context.Context, pkt Packet, except_id string) {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
 
@@ -536,7 +551,7 @@ func (a *AgentObj) doBroadcast(pkt Packet, except_id string) {
 			continue
 		}
 		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
-		go p.Send(pkt)
+		go p.Send(ctx, pkt)
 	}
 }
 
@@ -636,11 +651,20 @@ func (a *AgentObj) handleAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 	return p.processAnnounce(ann, fromPeer)
 }
 
-func (a *AgentObj) SendTo(target string, pkt interface{}) error {
+func (a *AgentObj) SendTo(ctx context.Context, target string, pkt interface{}) error {
 	p := a.GetPeer(target) // TODO find best route instead of using GetPeer
 	if p == nil {
 		return ErrPeerNoRoute
 	}
 
-	return p.Send(pkt)
+	return p.Send(ctx, pkt)
+}
+
+func (a *AgentObj) TrySendTo(target string, pkt interface{}) error {
+	p := a.GetPeer(target) // TODO find best route instead of using GetPeer
+	if p == nil {
+		return ErrPeerNoRoute
+	}
+
+	return p.TrySend(pkt)
 }

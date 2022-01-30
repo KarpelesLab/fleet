@@ -1,6 +1,7 @@
 package fleet
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/asn1"
 	"encoding/gob"
@@ -83,6 +84,7 @@ func (a *AgentObj) handleFleetConn(tc *tls.Conn) {
 		aliveTime: time.Now(),
 		enc:       gob.NewEncoder(tc),
 		sendQueue: make(chan Packet, 128),
+		valid:     true,
 	}
 	err := p.fetchUuidFromCertificate()
 	if err != nil {
@@ -98,10 +100,8 @@ func (a *AgentObj) handleFleetConn(tc *tls.Conn) {
 
 	log.Printf("[fleet] Connection with peer %s established", p.id)
 
-	p.valid = true
-	p.register()
-	p.sendHandshake()
-	p.annTime = time.Now()
+	go p.sendHandshake(context.Background()) // will disappear
+	go p.register()
 	go p.loop()
 	go p.writeLoop()
 	go p.monitor()
@@ -189,7 +189,7 @@ func (p *Peer) handlePacket(pktI interface{}) error {
 	case *PacketPong:
 		if pkt.TargetId != p.a.id {
 			// forward
-			return p.a.SendTo(pkt.TargetId, pkt)
+			return p.a.TrySendTo(pkt.TargetId, pkt)
 		}
 		sp := p.a.GetPeer(pkt.SourceId)
 		if sp != nil {
@@ -199,28 +199,28 @@ func (p *Peer) handlePacket(pktI interface{}) error {
 	case *PacketRpc:
 		if pkt.TargetId != p.a.id {
 			// fw
-			return p.a.SendTo(pkt.TargetId, pkt)
+			return p.a.TrySendTo(pkt.TargetId, pkt)
 		}
 		// we don't really care about the source, just do the rpc thing
 		return p.a.handleRpc(pkt)
 	case *PacketDbRecord:
 		if pkt.TargetId != p.a.id {
 			// fw
-			return p.a.SendTo(pkt.TargetId, pkt)
+			return p.a.TrySendTo(pkt.TargetId, pkt)
 		}
 		// let the db handle that
 		return feedDbSet(pkt.Bucket, pkt.Key, pkt.Val, pkt.Stamp)
 	case *PacketDbRequest:
 		if pkt.TargetId != p.a.id {
 			// fw
-			return p.a.SendTo(pkt.TargetId, pkt)
+			return p.a.TrySendTo(pkt.TargetId, pkt)
 		}
 		// grab from db
 		return p.handleDbRequest(pkt)
 	case *PacketDbVersions:
 		for _, v := range pkt.Info {
 			if needDbEntry(v.Bucket, v.Key, v.Stamp) {
-				if err := p.Send(&PacketDbRequest{TargetId: p.id, SourceId: p.a.id, Bucket: v.Bucket, Key: v.Key}); err != nil {
+				if err := p.TrySend(&PacketDbRequest{TargetId: p.id, SourceId: p.a.id, Bucket: v.Bucket, Key: v.Key}); err != nil {
 					return err
 				}
 			}
@@ -248,7 +248,7 @@ func (p *Peer) processAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 	atomic.StoreUint32(&p.numG, ann.NumG)
 
 	// send response
-	p.a.SendTo(ann.Id, &PacketPong{TargetId: ann.Id, SourceId: p.a.id, Now: ann.Now})
+	p.a.TrySendTo(ann.Id, &PacketPong{TargetId: ann.Id, SourceId: p.a.id, Now: ann.Now})
 
 	// broadcast
 	//p.a.doBroadcast(ann, fromPeer.id)
@@ -278,7 +278,7 @@ func (p *Peer) handleDbRequest(pkt *PacketDbRequest) error {
 		Val:      val,
 	}
 
-	return p.Send(res)
+	return p.Send(context.Background(), res)
 }
 
 func (p *Peer) fetchUuidFromCertificate() error {
@@ -313,8 +313,24 @@ func (p *Peer) fetchUuidFromCertificate() error {
 	return nil
 }
 
-func (p *Peer) Send(pkt Packet) error {
+func (p *Peer) Send(ctx context.Context, pkt Packet) error {
+	log.Printf("[debug] sending packet %T to %s with context", pkt, p.id)
+
+	select {
+	case <-p.alive:
+		log.Printf("[debug] sending packet to %s failed: connection closed", p.id)
+		return ErrConnectionClosed
+	case <-ctx.Done():
+		log.Printf("[debug] sending packet to %s failed: queue full and timeout reached", p.id)
+		return ctx.Err()
+	case p.sendQueue <- pkt:
+		return nil
+	}
+}
+
+func (p *Peer) TrySend(pkt Packet) error {
 	log.Printf("[debug] sending packet %T to %s", pkt, p.id)
+
 	select {
 	case <-p.alive:
 		log.Printf("[debug] sending packet to %s failed: connection closed", p.id)
@@ -322,7 +338,6 @@ func (p *Peer) Send(pkt Packet) error {
 	case p.sendQueue <- pkt:
 		return nil
 	default:
-		log.Printf("[debug] sending packet to %s failed: queue full", p.id)
 		return ErrWriteQueueFull
 	}
 }
@@ -358,9 +373,19 @@ func (p *Peer) writeLoop() {
 
 func (p *Peer) Close(reason string) error {
 	log.Printf("[fleet] Closing connection to %s: %s", p.id, reason)
-	err := p.Send(&PacketClose{Reason: reason})
+	err := p.TrySend(&PacketClose{Reason: reason})
 	if err != nil {
 		return err
+	}
+	// wait for actual close
+	t := time.NewTimer(time.Second)
+	defer t.Stop()
+
+	select {
+	case <-p.alive:
+		// remote closed
+	case <-t.C:
+		// timeout
 	}
 	return p.c.Close()
 }
@@ -395,7 +420,7 @@ func (p *Peer) unregister() {
 	})
 }
 
-func (p *Peer) sendHandshake() error {
+func (p *Peer) sendHandshake(ctx context.Context) error {
 	pkt := &PacketHandshake{
 		Id:       p.a.id,
 		Name:     p.a.name,
@@ -404,10 +429,10 @@ func (p *Peer) sendHandshake() error {
 		Git:      goupd.GIT_TAG,
 		Build:    goupd.DATE_TAG,
 	}
-	err := p.Send(pkt)
+	err := p.Send(ctx, pkt)
 	if err != nil {
 		return err
 	}
-	p.Send(databasePacket())
-	return p.Send(seedPacket())
+	p.Send(ctx, databasePacket())
+	return p.Send(ctx, seedPacket())
 }
