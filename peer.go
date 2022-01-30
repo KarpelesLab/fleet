@@ -27,11 +27,13 @@ type Peer struct {
 
 	sendQueue chan Packet
 
-	annIdx  uint64
-	numG    uint32
-	cnx     time.Time
-	annTime time.Time
-	Ping    time.Duration
+	annIdx    uint64
+	numG      uint32
+	cnx       time.Time
+	annTime   time.Time
+	aliveTime time.Time
+	timeOfft  time.Duration
+	Ping      time.Duration
 
 	a *AgentObj
 
@@ -155,7 +157,7 @@ func (p *Peer) monitor() {
 			p.Close("alive channel closed")
 			return
 		case <-t.C:
-			if time.Since(p.annTime) > time.Minute {
+			if time.Since(p.aliveTime) > time.Minute {
 				p.Close("announce time timeout")
 				p.unregister()
 				return
@@ -179,6 +181,10 @@ func (p *Peer) handlePacket(pktI interface{}) error {
 		return handleNewSeed(pkt.Seed, pkt.Time)
 	case *PacketAnnounce:
 		return p.a.handleAnnounce(pkt, p)
+	case *PacketAlive:
+		p.aliveTime = time.Now()
+		p.timeOfft = p.aliveTime.Sub(pkt.Now)
+		return nil
 	case *PacketPong:
 		if pkt.TargetId != p.a.id {
 			// forward
@@ -316,12 +322,23 @@ func (p *Peer) Send(pkt Packet) error {
 }
 
 func (p *Peer) writeLoop() {
+	t := time.NewTicker(5 * time.Second)
+
 	defer p.c.Close()
 	for {
 		select {
 		case <-p.alive:
 			// closed channel
 			return
+		case now := <-t.C:
+			pkt := &PacketAlive{
+				Now: now,
+			}
+			err := p.enc.Encode(pkt)
+			if err != nil {
+				log.Printf("[fleet] Write to peer failed: %s", err)
+				return
+			}
 		case pkt := <-p.sendQueue:
 			err := p.enc.Encode(pkt)
 			if err != nil {

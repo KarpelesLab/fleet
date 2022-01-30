@@ -489,7 +489,7 @@ func (a *AgentObj) listenLoop() {
 }
 
 func (a *AgentObj) eventLoop() {
-	announce := time.NewTicker(5 * time.Second)
+	announce := time.NewTicker(30 * time.Second)
 
 	for {
 		select {
@@ -581,6 +581,7 @@ func (a *AgentObj) DumpInfo(w io.Writer) {
 		fmt.Fprintf(w, "Connected:%s (%s ago)\n", p.cnx, time.Since(p.cnx))
 		fmt.Fprintf(w, "Last Ann: %s\n", time.Since(p.annTime))
 		fmt.Fprintf(w, "Latency:  %s\n", p.Ping)
+		fmt.Fprintf(w, "Offset:   %s\n", p.timeOfft)
 		fmt.Fprintf(w, "Routines: %d\n", p.numG)
 		fmt.Fprintf(w, "\n")
 	}

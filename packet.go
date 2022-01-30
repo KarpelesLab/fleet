@@ -8,6 +8,7 @@ import (
 func init() {
 	gob.Register(&PacketHandshake{})
 	gob.Register(&PacketAnnounce{})
+	gob.Register(&PacketAlive{})
 	gob.Register(&PacketSeed{})
 	gob.Register(&PacketPong{})
 	gob.Register(&PacketRpc{})
@@ -38,6 +39,11 @@ type PacketAnnounce struct {
 	Idx  uint64
 	NumG uint32 // number of goroutines
 	AZ   string
+}
+
+// PacketAlive is sent every 5 seconds to confirm a connection is alive
+type PacketAlive struct {
+	Now time.Time
 }
 
 type PacketSeed struct {
