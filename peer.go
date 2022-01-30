@@ -339,13 +339,13 @@ func (p *Peer) writeLoop() {
 			pkt := &PacketAlive{
 				Now: now,
 			}
-			err := p.enc.Encode(pkt)
+			err := p.enc.Encode(&pkt)
 			if err != nil {
 				log.Printf("[fleet] Write to peer failed: %s", err)
 				return
 			}
 		case pkt := <-p.sendQueue:
-			err := p.enc.Encode(pkt)
+			err := p.enc.Encode(&pkt)
 			if err != nil {
 				log.Printf("[fleet] Write to peer failed: %s", err)
 				return
