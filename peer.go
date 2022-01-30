@@ -80,6 +80,7 @@ func (a *AgentObj) handleFleetConn(tc *tls.Conn) {
 		cnx:       time.Now(),
 		addr:      tc.RemoteAddr().(*net.TCPAddr),
 		alive:     make(chan struct{}),
+		aliveTime: time.Now(),
 		enc:       gob.NewEncoder(tc),
 		sendQueue: make(chan Packet, 128),
 	}
