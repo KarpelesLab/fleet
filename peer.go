@@ -150,6 +150,7 @@ func (p *Peer) loop() {
 }
 
 func (p *Peer) monitor() {
+	defer p.unregister()
 	t := time.NewTicker(5 * time.Second)
 
 	for {
@@ -159,8 +160,7 @@ func (p *Peer) monitor() {
 			return
 		case <-t.C:
 			if time.Since(p.aliveTime) > time.Minute {
-				p.Close("announce time timeout")
-				p.unregister()
+				p.Close("alive time timeout")
 				return
 			}
 		}
