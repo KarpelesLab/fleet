@@ -313,15 +313,15 @@ func (p *Peer) fetchUuidFromCertificate() error {
 }
 
 func (p *Peer) Send(pkt Packet) error {
-	log.Printf("[debug] sending packet %+v", pkt)
+	log.Printf("[debug] sending packet %T to %s", pkt, p.id)
 	select {
 	case <-p.alive:
-		log.Printf("[debug] sending packet failed: connection closed")
+		log.Printf("[debug] sending packet to %s failed: connection closed", p.id)
 		return ErrConnectionClosed
 	case p.sendQueue <- pkt:
 		return nil
 	default:
-		log.Printf("[debug] sending packet failed: queue full")
+		log.Printf("[debug] sending packet to %s failed: queue full", p.id)
 		return ErrWriteQueueFull
 	}
 }
@@ -368,8 +368,9 @@ func (p *Peer) register() {
 	defer a.peersMutex.Unlock()
 
 	old, ok := a.peers[p.id]
-	if ok {
-		go old.Close("new connection for same peer")
+	if ok && old != p {
+		go p.Close("already connected, dropping new connection")
+		return
 	}
 
 	a.peers[p.id] = p
