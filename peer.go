@@ -40,7 +40,7 @@ type Peer struct {
 	mutex sync.RWMutex
 	unreg sync.Once
 
-	alive chan interface{}
+	alive chan struct{}
 }
 
 func (a *AgentObj) newConn(c net.Conn) {
@@ -79,9 +79,9 @@ func (a *AgentObj) handleFleetConn(tc *tls.Conn) {
 		a:         a,
 		cnx:       time.Now(),
 		addr:      tc.RemoteAddr().(*net.TCPAddr),
-		alive:     make(chan interface{}),
+		alive:     make(chan struct{}),
 		enc:       gob.NewEncoder(tc),
-		sendQueue: make(chan Packet, 10),
+		sendQueue: make(chan Packet, 128),
 	}
 	err := p.fetchUuidFromCertificate()
 	if err != nil {
@@ -313,18 +313,23 @@ func (p *Peer) fetchUuidFromCertificate() error {
 }
 
 func (p *Peer) Send(pkt Packet) error {
+	log.Printf("[debug] sending packet %+v", pkt)
 	select {
+	case <-p.alive:
+		log.Printf("[debug] sending packet failed: connection closed")
+		return ErrConnectionClosed
 	case p.sendQueue <- pkt:
 		return nil
 	default:
+		log.Printf("[debug] sending packet failed: queue full")
 		return ErrWriteQueueFull
 	}
 }
 
 func (p *Peer) writeLoop() {
+	defer p.c.Close()
 	t := time.NewTicker(5 * time.Second)
 
-	defer p.c.Close()
 	for {
 		select {
 		case <-p.alive:
