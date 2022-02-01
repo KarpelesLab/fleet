@@ -680,6 +680,17 @@ func (a *Agent) GetPeerByName(name string) *Peer {
 	return nil
 }
 
+func (a *Agent) GetPeers() []*Peer {
+	a.peersMutex.RLock()
+	defer a.peersMutex.RUnlock()
+
+	res := make([]*Peer, 0, len(a.peers))
+	for _, p := range a.peers {
+		res = append(res, p)
+	}
+	return res
+}
+
 func (a *Agent) handleAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 	p := a.GetPeer(ann.Id)
 
