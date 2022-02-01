@@ -112,6 +112,9 @@ func (a *Agent) start() {
 	a.initDb()
 	a.initSeed()
 	a.directoryThread()
+
+	// only setSelf() after everything has been started so we know Self() returns a ready instance
+	setSelf(a)
 }
 
 func closeAgentect(a *Agent) {
