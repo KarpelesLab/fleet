@@ -18,7 +18,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (a *AgentObj) getLocalKey() (crypto.Signer, error) {
+func (a *Agent) getLocalKey() (crypto.Signer, error) {
 	keyPem, err := a.dbFleetGet("internal_key:key")
 	if err != nil {
 		// gen & save a new key
@@ -57,7 +57,7 @@ func (a *AgentObj) getLocalKey() (crypto.Signer, error) {
 	return nil, fmt.Errorf("failed to convert key type %T into crypto.Signer", keyIntf)
 }
 
-func (a *AgentObj) GenInternalCert() (tls.Certificate, error) {
+func (a *Agent) GenInternalCert() (tls.Certificate, error) {
 	log.Printf("[tls] Generating new CA & client certificates")
 	// generate a new CA & certificate
 	ca_key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -131,7 +131,7 @@ func (a *AgentObj) GenInternalCert() (tls.Certificate, error) {
 	return tls.Certificate{Certificate: [][]byte{crt_der}, PrivateKey: key}, nil
 }
 
-func (a *AgentObj) GetInternalCert() (tls.Certificate, error) {
+func (a *Agent) GetInternalCert() (tls.Certificate, error) {
 	// get internal certificate
 	crt, err := a.dbFleetGet("internal_key:crt")
 	if err != nil {
@@ -145,7 +145,7 @@ func (a *AgentObj) GetInternalCert() (tls.Certificate, error) {
 	return tls.X509KeyPair(crt, key)
 }
 
-func (a *AgentObj) GetDefaultPublicCert() (tls.Certificate, error) {
+func (a *Agent) GetDefaultPublicCert() (tls.Certificate, error) {
 	// get internal certificate
 	crt, err := a.dbFleetGet("public_key:crt")
 	if err != nil {
@@ -159,7 +159,7 @@ func (a *AgentObj) GetDefaultPublicCert() (tls.Certificate, error) {
 	return tls.X509KeyPair(crt, key)
 }
 
-func (a *AgentObj) GetCA() (*x509.CertPool, error) {
+func (a *Agent) GetCA() (*x509.CertPool, error) {
 	ca := x509.NewCertPool()
 
 	// get records
@@ -197,7 +197,7 @@ func (a *AgentObj) GetCA() (*x509.CertPool, error) {
 
 // GetTlsConfig returns TLS config suitable for making public facing ssl
 // servers.
-func (a *AgentObj) GetTlsConfig() (*tls.Config, error) {
+func (a *Agent) GetTlsConfig() (*tls.Config, error) {
 	if cert, err := a.GetDefaultPublicCert(); err == nil {
 		cfg := new(tls.Config)
 		cfg.Certificates = []tls.Certificate{cert}
@@ -217,7 +217,7 @@ func (a *AgentObj) GetTlsConfig() (*tls.Config, error) {
 	return nil, errors.New("failed to load TLS certificates")
 }
 
-func (a *AgentObj) GetClientTlsConfig() (*tls.Config, error) {
+func (a *Agent) GetClientTlsConfig() (*tls.Config, error) {
 	if cert, err := a.GetInternalCert(); err == nil {
 		cfg := new(tls.Config)
 		cfg.Certificates = []tls.Certificate{cert}
@@ -227,7 +227,7 @@ func (a *AgentObj) GetClientTlsConfig() (*tls.Config, error) {
 	return nil, errors.New("failed to load TLS certificates")
 }
 
-func (a *AgentObj) ConfigureTlsServer(cfg *tls.Config) {
+func (a *Agent) ConfigureTlsServer(cfg *tls.Config) {
 	// perform some basic settings to ensure server is secure
 	cfg.MinVersion = tls.VersionTLS12
 	cfg.CurvePreferences = []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256}

@@ -8,7 +8,7 @@ import (
 	"github.com/KarpelesLab/ringbuf"
 )
 
-func (a *AgentObj) initLog() {
+func (a *Agent) initLog() {
 	var err error
 
 	a.logbuf, err = ringbuf.New(1024 * 1024)
@@ -19,17 +19,17 @@ func (a *AgentObj) initLog() {
 	}
 }
 
-func (a *AgentObj) LogTarget() io.Writer {
+func (a *Agent) LogTarget() io.Writer {
 	return a.logbuf
 }
 
-func (a *AgentObj) LogDmesg(w io.Writer) (int64, error) {
+func (a *Agent) LogDmesg(w io.Writer) (int64, error) {
 	r := a.logbuf.Reader()
 	defer r.Close()
 	return io.Copy(w, r)
 }
 
-func (a *AgentObj) shutdownLog() {
+func (a *Agent) shutdownLog() {
 	// return output to normal first
 	log.SetOutput(os.Stderr)
 	a.logbuf.Close()

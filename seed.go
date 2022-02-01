@@ -42,7 +42,7 @@ func makeSeed(s []byte, t time.Time) *seedData {
 	}
 }
 
-func (a *AgentObj) initSeed() {
+func (a *Agent) initSeed() {
 	// check for seed in db (seed is actually shared, but update rule is different from regular record so we use fleet)
 	if d, err := a.dbSimpleGet([]byte("fleet"), []byte("seed")); d != nil && err == nil && len(d) > 128 {
 		// found seed data in db
@@ -91,11 +91,11 @@ func (a *AgentObj) initSeed() {
 	log.Printf("[fleet] Initialized with cluster seed ID = %s", a.SeedId())
 }
 
-func (a *AgentObj) SeedId() uuid.UUID {
+func (a *Agent) SeedId() uuid.UUID {
 	return a.seed.Id
 }
 
-func (s *seedData) WriteToDisk(a *AgentObj) error {
+func (s *seedData) WriteToDisk(a *Agent) error {
 	ts, err := s.ts.MarshalBinary()
 	if err != nil {
 		return err
@@ -110,20 +110,20 @@ func (s *seedData) WriteToDisk(a *AgentObj) error {
 	return nil
 }
 
-func (a *AgentObj) SeedTlsConfig(c *tls.Config) {
+func (a *Agent) SeedTlsConfig(c *tls.Config) {
 	k := sha256.Sum256(a.seed.seed[32:64])
 	// TODO use hmac
 
 	c.SetSessionTicketKeys([][32]byte{k})
 }
 
-func (a *AgentObj) SeedSign(in []byte) []byte {
+func (a *Agent) SeedSign(in []byte) []byte {
 	hmac := hmac.New(sha3.New256, a.seed.seed)
 	hmac.Write(in)
 	return hmac.Sum([]byte{})
 }
 
-func (a *AgentObj) SeedCrypt(in []byte) ([]byte, error) {
+func (a *Agent) SeedCrypt(in []byte) ([]byte, error) {
 	block, err := aes.NewCipher(a.seed.seed[:32])
 	if err != nil {
 		return nil, err
@@ -143,7 +143,7 @@ func (a *AgentObj) SeedCrypt(in []byte) ([]byte, error) {
 	return append(nonce, ciphertext...), nil
 }
 
-func (a *AgentObj) SeedDecrypt(in []byte) ([]byte, error) {
+func (a *Agent) SeedDecrypt(in []byte) ([]byte, error) {
 	block, err := aes.NewCipher(a.seed.seed[:32])
 	if err != nil {
 		return nil, err
@@ -167,14 +167,14 @@ func (a *AgentObj) SeedDecrypt(in []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-func (a *AgentObj) seedPacket() *PacketSeed {
+func (a *Agent) seedPacket() *PacketSeed {
 	return &PacketSeed{
 		Seed: a.seed.seed,
 		Time: a.seed.ts,
 	}
 }
 
-func (a *AgentObj) handleNewSeed(s []byte, t time.Time) error {
+func (a *Agent) handleNewSeed(s []byte, t time.Time) error {
 	cur := a.seed
 	if t.After(cur.ts) {
 		// time is more recent, ignore seed

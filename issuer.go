@@ -20,7 +20,7 @@ import (
 	"github.com/KarpelesLab/goupd"
 )
 
-func (a *AgentObj) SetIssuer(url string) {
+func (a *Agent) SetIssuer(url string) {
 	// this means that GetFile(internal_key.jwt) and such should call our issuer
 	//
 

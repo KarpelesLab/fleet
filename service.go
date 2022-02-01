@@ -19,15 +19,15 @@ type ServiceConn struct {
 
 type RpcEndpoint func(interface{}) (interface{}, error)
 
-func (a *AgentObj) RoundTripper() http.RoundTripper {
+func (a *Agent) RoundTripper() http.RoundTripper {
 	return a.transport
 }
 
-func (a *AgentObj) DialContext(c context.Context, network, addr string) (net.Conn, error) {
+func (a *Agent) DialContext(c context.Context, network, addr string) (net.Conn, error) {
 	return a.Dial(network, addr)
 }
 
-func (a *AgentObj) Dial(network, addr string) (net.Conn, error) {
+func (a *Agent) Dial(network, addr string) (net.Conn, error) {
 	// addr is in the form of <service>.<id>:<irrelevant port>
 
 	addr, _, err := net.SplitHostPort(addr)
@@ -53,7 +53,7 @@ func (a *AgentObj) Dial(network, addr string) (net.Conn, error) {
 }
 
 // connect to given peer under specified protocol (if supported)
-func (a *AgentObj) Connect(id string, service string) (net.Conn, error) {
+func (a *Agent) Connect(id string, service string) (net.Conn, error) {
 	p := a.GetPeer(id)
 	if p == nil {
 		return nil, errors.New("no route to peer")
@@ -107,7 +107,7 @@ func (a *AgentObj) Connect(id string, service string) (net.Conn, error) {
 	return &ServiceConn{Conn: c}, nil
 }
 
-func (a *AgentObj) AddService(service string) chan net.Conn {
+func (a *Agent) AddService(service string) chan net.Conn {
 	a.svcMutex.Lock()
 	defer a.svcMutex.Unlock()
 
@@ -116,7 +116,7 @@ func (a *AgentObj) AddService(service string) chan net.Conn {
 	return a.services[service]
 }
 
-func (a *AgentObj) handleServiceConn(tc *tls.Conn) {
+func (a *Agent) handleServiceConn(tc *tls.Conn) {
 	res := make([]byte, 1)
 	_, err := io.ReadFull(tc, res)
 	if err != nil {
@@ -144,7 +144,7 @@ func (a *AgentObj) handleServiceConn(tc *tls.Conn) {
 	a.forwardConnection(string(res), tc)
 }
 
-func (a *AgentObj) forwardConnection(service string, c net.Conn) {
+func (a *Agent) forwardConnection(service string, c net.Conn) {
 	a.svcMutex.RLock()
 	defer a.svcMutex.RUnlock()
 

@@ -21,7 +21,7 @@ import (
 
 type DbWatchCallback func(string, []byte)
 
-func (a *AgentObj) initDb() {
+func (a *Agent) initDb() {
 	// Open the Bolt database located in the config directory
 	d, err := os.UserConfigDir()
 	if err != nil {
@@ -36,26 +36,26 @@ func (a *AgentObj) initDb() {
 }
 
 // simple db get for program usage
-func (a *AgentObj) DbGet(key string) (string, error) {
+func (a *Agent) DbGet(key string) (string, error) {
 	v, err := a.dbSimpleGet([]byte("app"), []byte(key))
 	return string(v), err
 }
 
 // simple db set for program usage
-func (a *AgentObj) DbSet(key string, value []byte) error {
+func (a *Agent) DbSet(key string, value []byte) error {
 	return a.feedDbSetBC([]byte("app"), []byte(key), value, DbNow())
 }
 
 // DbWatch will trigger the cb function upon updates of the given key
 // Special key "*" covers all keys (can only be one callback for a key)
-func (a *AgentObj) DbWatch(key string, cb func(string, []byte)) {
+func (a *Agent) DbWatch(key string, cb func(string, []byte)) {
 	a.dbWatchLock.Lock()
 	defer a.dbWatchLock.Unlock()
 
 	a.dbWatch[key] = cb
 }
 
-func (a *AgentObj) dbWatchTrigger(key string, val []byte) {
+func (a *Agent) dbWatchTrigger(key string, val []byte) {
 	a.dbWatchLock.RLock()
 	cb1, ok1 := a.dbWatch[key]
 	cb2, ok2 := a.dbWatch["*"]
@@ -69,7 +69,7 @@ func (a *AgentObj) dbWatchTrigger(key string, val []byte) {
 	}
 }
 
-func (a *AgentObj) feedDbSetBC(bucket, key, val []byte, v DbStamp) error {
+func (a *Agent) feedDbSetBC(bucket, key, val []byte, v DbStamp) error {
 	if err := a.feedDbSet(bucket, key, val, v); err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func (a *AgentObj) feedDbSetBC(bucket, key, val []byte, v DbStamp) error {
 	return nil
 }
 
-func (a *AgentObj) needDbEntry(bucket, key []byte, v DbStamp) bool {
+func (a *Agent) needDbEntry(bucket, key []byte, v DbStamp) bool {
 	if string(bucket) == "local" || string(bucket) == "fleet" {
 		// bucket "local" cannot be replicated
 		return false
@@ -99,7 +99,7 @@ func (a *AgentObj) needDbEntry(bucket, key []byte, v DbStamp) bool {
 	return v.After(curVT)
 }
 
-func (a *AgentObj) feedDbSet(bucket, key, val []byte, v DbStamp) error {
+func (a *Agent) feedDbSet(bucket, key, val []byte, v DbStamp) error {
 	if string(bucket) == "local" || string(bucket) == "fleet" {
 		// bucket "local" cannot be replicated
 		return nil
@@ -164,7 +164,7 @@ func (a *AgentObj) feedDbSet(bucket, key, val []byte, v DbStamp) error {
 	return err
 }
 
-func (a *AgentObj) dbGetVersion(bucket, key []byte) (val []byte, stamp DbStamp, err error) {
+func (a *Agent) dbGetVersion(bucket, key []byte) (val []byte, stamp DbStamp, err error) {
 	if string(bucket) == "local" || string(bucket) == "fleet" {
 		// bucket "local" cannot be replicated
 		err = fs.ErrNotExist
@@ -194,7 +194,7 @@ func (a *AgentObj) dbGetVersion(bucket, key []byte) (val []byte, stamp DbStamp, 
 	return
 }
 
-func (a *AgentObj) databasePacket() *PacketDbVersions {
+func (a *Agent) databasePacket() *PacketDbVersions {
 	p := &PacketDbVersions{}
 
 	if c, err := a.NewDbCursor([]byte("version")); err == nil {
@@ -223,7 +223,7 @@ func (a *AgentObj) databasePacket() *PacketDbVersions {
 }
 
 // internal setter
-func (a *AgentObj) dbSimpleSet(bucket, key, val []byte) error {
+func (a *Agent) dbSimpleSet(bucket, key, val []byte) error {
 	return a.db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists(bucket)
 		if err != nil {
@@ -234,7 +234,7 @@ func (a *AgentObj) dbSimpleSet(bucket, key, val []byte) error {
 }
 
 // internal delete
-func (a *AgentObj) dbSimpleDel(bucket, key []byte) error {
+func (a *Agent) dbSimpleDel(bucket, key []byte) error {
 	return a.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucket)
 		if b == nil {
@@ -245,7 +245,7 @@ func (a *AgentObj) dbSimpleDel(bucket, key []byte) error {
 }
 
 // internal getter
-func (a *AgentObj) dbSimpleGet(bucket, key []byte) (r []byte, err error) {
+func (a *Agent) dbSimpleGet(bucket, key []byte) (r []byte, err error) {
 	err = a.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucket)
 		if b == nil {
@@ -262,7 +262,7 @@ func (a *AgentObj) dbSimpleGet(bucket, key []byte) (r []byte, err error) {
 	return
 }
 
-func (a *AgentObj) dbFleetGet(keyname string) ([]byte, error) {
+func (a *Agent) dbFleetGet(keyname string) ([]byte, error) {
 	// for example keyname="internal_key:jwt"
 
 	data, err := a.dbSimpleGet([]byte("fleet"), []byte(keyname))
@@ -288,7 +288,7 @@ func (a *AgentObj) dbFleetGet(keyname string) ([]byte, error) {
 	return data, err
 }
 
-func (a *AgentObj) dbFleetDel(keyname string) error {
+func (a *Agent) dbFleetDel(keyname string) error {
 	// for example keyname="internal_key:jwt"
 	return a.dbSimpleDel([]byte("fleet"), []byte(keyname))
 }
@@ -304,7 +304,7 @@ func dbCursorFinalizer(c *DbCursor) {
 	c.tx.Rollback()
 }
 
-func (a *AgentObj) NewDbCursor(bucket []byte) (*DbCursor, error) {
+func (a *Agent) NewDbCursor(bucket []byte) (*DbCursor, error) {
 	// create a readonly tx and a cursor
 	tx, err := a.db.Begin(false)
 	if err != nil {
@@ -370,6 +370,6 @@ func (c *DbCursor) Close() error {
 	return c.tx.Rollback()
 }
 
-func (a *AgentObj) shutdownDb() {
+func (a *Agent) shutdownDb() {
 	a.db.Close()
 }

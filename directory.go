@@ -42,7 +42,7 @@ type directoryPingResponse struct {
 	Namespace *directoryNs
 }
 
-func (a *AgentObj) directoryThread() {
+func (a *Agent) directoryThread() {
 	if a.directoryThreadStart() {
 		return
 	}
@@ -59,7 +59,7 @@ func (a *AgentObj) directoryThread() {
 	}()
 }
 
-func (a *AgentObj) directoryThreadStart() bool {
+func (a *Agent) directoryThreadStart() bool {
 	// this is run in its own gorouting after db is setup
 	defer func() {
 		// ensure this thread crashing doesn't take the whole process
@@ -142,7 +142,7 @@ func (a *AgentObj) directoryThreadStart() bool {
 	return true
 }
 
-func (a *AgentObj) jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
+func (a *Agent) jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
 	u := &url.URL{
 		Scheme: "https",
 		Host:   dir,

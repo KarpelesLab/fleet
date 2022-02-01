@@ -30,7 +30,7 @@ var (
 	rpcE = make(map[string]RpcEndpoint)
 )
 
-type AgentObj struct {
+type Agent struct {
 	socket net.Listener
 
 	id       string
@@ -70,13 +70,13 @@ type AgentObj struct {
 	seed *seedData
 }
 
-func New() *AgentObj {
+func New() *Agent {
 	local := "local"
 	if host, err := os.Hostname(); err == nil && host != "" {
 		local = host
 	}
 
-	a := &AgentObj{
+	a := &Agent{
 		id:       local,
 		name:     local,
 		peers:    make(map[string]*Peer),
@@ -84,7 +84,7 @@ func New() *AgentObj {
 		rpc:      make(map[uintptr]chan *PacketRpcResponse),
 		dbWatch:  make(map[string]DbWatchCallback),
 	}
-	runtime.SetFinalizer(a, closeAgentObject)
+	runtime.SetFinalizer(a, closeAgentect)
 	a.initLog()
 	a.initPath()
 	a.initDb()
@@ -93,16 +93,16 @@ func New() *AgentObj {
 	return a
 }
 
-func closeAgentObject(a *AgentObj) {
+func closeAgentect(a *Agent) {
 	a.Close()
 }
 
-func (a *AgentObj) Close() {
+func (a *Agent) Close() {
 	a.shutdownDb()
 	a.shutdownLog()
 }
 
-func (a *AgentObj) doInit(token *jwt.Token) (err error) {
+func (a *Agent) doInit(token *jwt.Token) (err error) {
 	if token != nil {
 		// update info based on jwt data
 		if id := token.Payload().GetString("id"); id != "" {
@@ -163,11 +163,11 @@ func (a *AgentObj) doInit(token *jwt.Token) (err error) {
 	return
 }
 
-func (a *AgentObj) Id() string {
+func (a *Agent) Id() string {
 	return a.id
 }
 
-func (a *AgentObj) Name() (string, string) {
+func (a *Agent) Name() (string, string) {
 	return a.name, a.hostname
 }
 
@@ -185,7 +185,7 @@ func CallRpcEndpoint(e string, p interface{}) (interface{}, error) {
 	return ep(p)
 }
 
-func (a *AgentObj) BroadcastRpc(ctx context.Context, endpoint string, data interface{}) error {
+func (a *Agent) BroadcastRpc(ctx context.Context, endpoint string, data interface{}) error {
 	// send request
 	pkt := &PacketRpc{
 		SourceId: a.id,
@@ -215,7 +215,7 @@ func (a *AgentObj) BroadcastRpc(ctx context.Context, endpoint string, data inter
 	return nil
 }
 
-func (a *AgentObj) broadcastDbRecord(ctx context.Context, bucket, key, val []byte, v DbStamp) error {
+func (a *Agent) broadcastDbRecord(ctx context.Context, bucket, key, val []byte, v DbStamp) error {
 	pkt := &PacketDbRecord{
 		SourceId: a.id,
 		Stamp:    v,
@@ -251,7 +251,7 @@ type rpcChoiceStruct struct {
 	peer     *Peer
 }
 
-func (a *AgentObj) AnyRpc(ctx context.Context, division string, endpoint string, data interface{}) error {
+func (a *Agent) AnyRpc(ctx context.Context, division string, endpoint string, data interface{}) error {
 	// send request
 	pkt := &PacketRpc{
 		SourceId: a.id,
@@ -292,7 +292,7 @@ func (a *AgentObj) AnyRpc(ctx context.Context, division string, endpoint string,
 	return errors.New("no peer available")
 }
 
-func (a *AgentObj) DivisionRpc(ctx context.Context, division int, endpoint string, data interface{}) error {
+func (a *Agent) DivisionRpc(ctx context.Context, division int, endpoint string, data interface{}) error {
 	divMatch := a.division
 	if division > 0 {
 		// only keep the N first parts of divison. Eg if N=2 and "divMatch" is "a/b/c", divMatch should become "a/b/"
@@ -337,7 +337,7 @@ func (a *AgentObj) DivisionRpc(ctx context.Context, division int, endpoint strin
 	return a.DivisionPrefixRpc(ctx, divMatch, endpoint, data)
 }
 
-func (a *AgentObj) DivisionPrefixRpc(ctx context.Context, divMatch string, endpoint string, data interface{}) error {
+func (a *Agent) DivisionPrefixRpc(ctx context.Context, divMatch string, endpoint string, data interface{}) error {
 	// send request
 	pkt := &PacketRpc{
 		SourceId: a.id,
@@ -370,7 +370,7 @@ func (a *AgentObj) DivisionPrefixRpc(ctx context.Context, divMatch string, endpo
 	return nil
 }
 
-func (a *AgentObj) RPC(ctx context.Context, id string, endpoint string, data interface{}) (interface{}, error) {
+func (a *Agent) RPC(ctx context.Context, id string, endpoint string, data interface{}) (interface{}, error) {
 	p := a.GetPeer(id)
 	if p == nil {
 		return nil, errors.New("Failed to find peer")
@@ -415,7 +415,7 @@ func (a *AgentObj) RPC(ctx context.Context, id string, endpoint string, data int
 	}
 }
 
-func (a *AgentObj) handleRpc(pkt *PacketRpc) error {
+func (a *Agent) handleRpc(pkt *PacketRpc) error {
 	res := PacketRpcResponse{
 		SourceId: a.id,
 		TargetId: pkt.SourceId,
@@ -468,7 +468,7 @@ func (a *AgentObj) handleRpc(pkt *PacketRpc) error {
 	return a.SendTo(ctx, res.TargetId, res)
 }
 
-func (a *AgentObj) dialPeer(host, name string, id string) {
+func (a *Agent) dialPeer(host, name string, id string) {
 	if id == a.id {
 		// avoid connect to self
 		return
@@ -495,14 +495,14 @@ func (a *AgentObj) dialPeer(host, name string, id string) {
 	go a.newConn(c)
 }
 
-func (a *AgentObj) IsConnected(id string) bool {
+func (a *Agent) IsConnected(id string) bool {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
 	_, ok := a.peers[id]
 	return ok
 }
 
-func (a *AgentObj) listenLoop() {
+func (a *Agent) listenLoop() {
 	for {
 		conn, err := a.socket.Accept()
 		if err != nil {
@@ -514,7 +514,7 @@ func (a *AgentObj) listenLoop() {
 	}
 }
 
-func (a *AgentObj) eventLoop() {
+func (a *Agent) eventLoop() {
 	announce := time.NewTicker(30 * time.Second)
 
 	for {
@@ -525,7 +525,7 @@ func (a *AgentObj) eventLoop() {
 	}
 }
 
-func (a *AgentObj) doAnnounce() {
+func (a *Agent) doAnnounce() {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
 
@@ -558,7 +558,7 @@ func (a *AgentObj) doAnnounce() {
 	wg.Wait()
 }
 
-func (a *AgentObj) doBroadcast(ctx context.Context, pkt Packet, except_id string) {
+func (a *Agent) doBroadcast(ctx context.Context, pkt Packet, except_id string) {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
 
@@ -589,7 +589,7 @@ func (s SortablePeers) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-func (a *AgentObj) DumpInfo(w io.Writer) {
+func (a *Agent) DumpInfo(w io.Writer) {
 	fmt.Fprintf(w, "Fleet Agent Information\n")
 	fmt.Fprintf(w, "=======================\n\n")
 	fmt.Fprintf(w, "Local name: %s\n", a.name)
@@ -640,13 +640,13 @@ func (a *AgentObj) DumpInfo(w io.Writer) {
 	}
 }
 
-func (a *AgentObj) GetPeer(id string) *Peer {
+func (a *Agent) GetPeer(id string) *Peer {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
 	return a.peers[id]
 }
 
-func (a *AgentObj) GetPeerByName(name string) *Peer {
+func (a *Agent) GetPeerByName(name string) *Peer {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
 
@@ -659,7 +659,7 @@ func (a *AgentObj) GetPeerByName(name string) *Peer {
 	return nil
 }
 
-func (a *AgentObj) handleAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
+func (a *Agent) handleAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 	p := a.GetPeer(ann.Id)
 
 	if p == nil {
@@ -671,7 +671,7 @@ func (a *AgentObj) handleAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 	return p.processAnnounce(ann, fromPeer)
 }
 
-func (a *AgentObj) SendTo(ctx context.Context, target string, pkt interface{}) error {
+func (a *Agent) SendTo(ctx context.Context, target string, pkt interface{}) error {
 	p := a.GetPeer(target) // TODO find best route instead of using GetPeer
 	if p == nil {
 		return ErrPeerNoRoute
@@ -680,7 +680,7 @@ func (a *AgentObj) SendTo(ctx context.Context, target string, pkt interface{}) e
 	return p.Send(ctx, pkt)
 }
 
-func (a *AgentObj) TrySendTo(target string, pkt interface{}) error {
+func (a *Agent) TrySendTo(target string, pkt interface{}) error {
 	p := a.GetPeer(target) // TODO find best route instead of using GetPeer
 	if p == nil {
 		return ErrPeerNoRoute
