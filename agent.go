@@ -30,6 +30,8 @@ var (
 	rpcE = make(map[string]RpcEndpoint)
 )
 
+type GetFileFunc func(string) ([]byte, error)
+
 type Agent struct {
 	socket net.Listener
 
@@ -64,13 +66,28 @@ type Agent struct {
 	dbWatchLock sync.RWMutex
 
 	// getfile callback
-	GetFile func(string) ([]byte, error)
+	GetFile GetFileFunc
 
 	// seed: use a pointer for atomic seed details update
 	seed *seedData
 }
 
+// New will just initialize a basic agent without any settings
 func New() *Agent {
+	a := spawn()
+	a.start()
+	return a
+}
+
+// return a new agent using the provided GetFile method
+func WithGetFile(f GetFileFunc) *Agent {
+	a := spawn()
+	a.GetFile = f
+	a.start()
+	return a
+}
+
+func spawn() *Agent {
 	local := "local"
 	if host, err := os.Hostname(); err == nil && host != "" {
 		local = host
@@ -85,12 +102,16 @@ func New() *Agent {
 		dbWatch:  make(map[string]DbWatchCallback),
 	}
 	runtime.SetFinalizer(a, closeAgentect)
+	return a
+}
+
+func (a *Agent) start() {
+	// perform various start actions
 	a.initLog()
 	a.initPath()
 	a.initDb()
 	a.initSeed()
 	a.directoryThread()
-	return a
 }
 
 func closeAgentect(a *Agent) {
