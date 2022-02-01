@@ -26,15 +26,7 @@ import (
 )
 
 var (
-	Agent = &AgentObj{
-		id:       "local",
-		name:     "local",
-		peers:    make(map[string]*Peer),
-		services: make(map[string]chan net.Conn),
-		rpc:      make(map[uintptr]chan *PacketRpcResponse),
-		dbWatch:  make(map[string]DbWatchCallback),
-	}
-	rpcE map[string]RpcEndpoint
+	rpcE = make(map[string]RpcEndpoint)
 )
 
 type AgentObj struct {
@@ -77,11 +69,31 @@ type AgentObj struct {
 	seed *seedData
 }
 
-func initAgent(token *jwt.Token) {
-	err := Agent.doInit(token)
-	if err != nil {
-		log.Printf("[agent] failed to init agent: %s", err)
+func New() *AgentObj {
+	a := &AgentObj{
+		id:       "local",
+		name:     "local",
+		peers:    make(map[string]*Peer),
+		services: make(map[string]chan net.Conn),
+		rpc:      make(map[uintptr]chan *PacketRpcResponse),
+		dbWatch:  make(map[string]DbWatchCallback),
 	}
+	runtime.SetFinalizer(a, closeAgentObject)
+	a.initLog()
+	a.initPath()
+	a.initDb()
+	a.initSeed()
+	a.directoryThread()
+	return a
+}
+
+func closeAgentObject(a *AgentObj) {
+	a.Close()
+}
+
+func (a *AgentObj) Close() {
+	a.shutdownDb()
+	a.shutdownLog()
 }
 
 func (a *AgentObj) doInit(token *jwt.Token) (err error) {
@@ -154,17 +166,11 @@ func (a *AgentObj) Name() (string, string) {
 }
 
 func SetRpcEndpoint(e string, f RpcEndpoint) {
-	if rpcE == nil {
-		rpcE = make(map[string]RpcEndpoint)
-	}
 	rpcE[e] = f
 }
 
 // CallRpcEndpoint will call the named RPC endpoint on the local machine
 func CallRpcEndpoint(e string, p interface{}) (interface{}, error) {
-	if rpcE == nil {
-		return nil, fs.ErrNotExist
-	}
 	ep, ok := rpcE[e]
 	if !ok {
 		return nil, fs.ErrNotExist
@@ -412,18 +418,9 @@ func (a *AgentObj) handleRpc(pkt *PacketRpc) error {
 
 	ctx := context.Background()
 
-	if rpcE == nil {
-		if pkt.R != 0 {
-			res.Error = "RPC: endpoint system not enabled (no endpoints)"
-			res.HasError = true
-			return a.SendTo(ctx, res.TargetId, res)
-		}
-		return nil
-	}
+	cb, ok := rpcE[pkt.Endpoint]
 
-	cb := rpcE[pkt.Endpoint]
-
-	if cb == nil {
+	if !ok || cb == nil {
 		if pkt.R != 0 {
 			res.Error = "RPC: endpoint not found"
 			res.HasError = true

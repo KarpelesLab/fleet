@@ -104,7 +104,10 @@ func (a *AgentObj) directoryThreadStart() bool {
 		return false
 	}
 
-	initAgent(jwtInfo)
+	err = a.doInit(jwtInfo)
+	if err != nil {
+		log.Printf("[agent] failed to init agent: %s", err)
+	}
 
 	dir := jwtInfo.Payload().GetString("aud") // Audience
 	if dir == "" {
@@ -129,7 +132,7 @@ func (a *AgentObj) directoryThreadStart() bool {
 	go func() {
 		for {
 			// connect to directory, ping, etc
-			err = jwtPingDirectory(dir, jwtData, client)
+			err = a.jwtPingDirectory(dir, jwtData, client)
 			if err != nil {
 				log.Printf("[fleet] ping failed: %s", err)
 			}
@@ -139,7 +142,7 @@ func (a *AgentObj) directoryThreadStart() bool {
 	return true
 }
 
-func jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
+func (a *AgentObj) jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
 	u := &url.URL{
 		Scheme: "https",
 		Host:   dir,
@@ -148,13 +151,13 @@ func jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
 
 	// post body
 	post := map[string]interface{}{
-		"Name":     Agent.name,
-		"Location": Agent.division,
+		"Name":     a.name,
+		"Location": a.division,
 		"Version":  goupd.DATE_TAG + "/" + goupd.GIT_TAG,
 		"Time":     time.Now().UnixMicro(), // in ms
 		"Private": &directoryPrivate{
-			Id:       Agent.id,
-			Division: Agent.division,
+			Id:       a.id,
+			Division: a.division,
 		},
 	}
 	postJson, err := json.Marshal(post)
@@ -195,10 +198,10 @@ func jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
 
 	for _, peer := range res.Namespace.Peers {
 		// check if we're connected
-		if Agent.IsConnected(peer.Private.Id) {
+		if a.IsConnected(peer.Private.Id) {
 			continue
 		}
-		go Agent.dialPeer(peer.IP, peer.Name, peer.Private.Id)
+		go a.dialPeer(peer.IP, peer.Name, peer.Private.Id)
 	}
 
 	return nil
