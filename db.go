@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 
 	"github.com/KarpelesLab/goupd"
 	bolt "go.etcd.io/bbolt"
@@ -22,13 +21,7 @@ import (
 
 type DbWatchCallback func(string, []byte)
 
-var (
-	db          *bolt.DB
-	dbWatch     = make(map[string]DbWatchCallback)
-	dbWatchLock sync.RWMutex
-)
-
-func initDb() {
+func (a *AgentObj) initDb() {
 	// Open the Bolt database located in the config directory
 	d, err := os.UserConfigDir()
 	if err != nil {
@@ -36,37 +29,37 @@ func initDb() {
 	}
 	d = filepath.Join(d, goupd.PROJECT_NAME)
 	EnsureDir(d)
-	db, err = bolt.Open(filepath.Join(d, "fleet.db"), 0600, nil)
+	a.db, err = bolt.Open(filepath.Join(d, "fleet.db"), 0600, nil)
 	if err != nil {
 		panic(err)
 	}
 }
 
 // simple db get for program usage
-func DbGet(key string) (string, error) {
-	v, err := dbSimpleGet([]byte("app"), []byte(key))
+func (a *AgentObj) DbGet(key string) (string, error) {
+	v, err := a.dbSimpleGet([]byte("app"), []byte(key))
 	return string(v), err
 }
 
 // simple db set for program usage
-func DbSet(key string, value []byte) error {
-	return feedDbSetBC([]byte("app"), []byte(key), value, DbNow())
+func (a *AgentObj) DbSet(key string, value []byte) error {
+	return a.feedDbSetBC([]byte("app"), []byte(key), value, DbNow())
 }
 
 // DbWatch will trigger the cb function upon updates of the given key
 // Special key "*" covers all keys (can only be one callback for a key)
-func DbWatch(key string, cb func(string, []byte)) {
-	dbWatchLock.Lock()
-	defer dbWatchLock.Unlock()
+func (a *AgentObj) DbWatch(key string, cb func(string, []byte)) {
+	a.dbWatchLock.Lock()
+	defer a.dbWatchLock.Unlock()
 
-	dbWatch[key] = cb
+	a.dbWatch[key] = cb
 }
 
-func dbWatchTrigger(key string, val []byte) {
-	dbWatchLock.RLock()
-	cb1, ok1 := dbWatch[key]
-	cb2, ok2 := dbWatch["*"]
-	dbWatchLock.RUnlock()
+func (a *AgentObj) dbWatchTrigger(key string, val []byte) {
+	a.dbWatchLock.RLock()
+	cb1, ok1 := a.dbWatch[key]
+	cb2, ok2 := a.dbWatch["*"]
+	a.dbWatchLock.RUnlock()
 
 	if ok1 {
 		cb1(key, val)
@@ -76,15 +69,15 @@ func dbWatchTrigger(key string, val []byte) {
 	}
 }
 
-func feedDbSetBC(bucket, key, val []byte, v DbStamp) error {
-	if err := feedDbSet(bucket, key, val, v); err != nil {
+func (a *AgentObj) feedDbSetBC(bucket, key, val []byte, v DbStamp) error {
+	if err := a.feedDbSet(bucket, key, val, v); err != nil {
 		return err
 	}
-	Agent.broadcastDbRecord(context.Background(), bucket, key, val, v)
+	a.broadcastDbRecord(context.Background(), bucket, key, val, v)
 	return nil
 }
 
-func needDbEntry(bucket, key []byte, v DbStamp) bool {
+func (a *AgentObj) needDbEntry(bucket, key []byte, v DbStamp) bool {
 	if string(bucket) == "local" || string(bucket) == "fleet" {
 		// bucket "local" cannot be replicated
 		return false
@@ -92,7 +85,7 @@ func needDbEntry(bucket, key []byte, v DbStamp) bool {
 	// compute global key (bucket + NUL + key)
 	fk := append(append(bucket, 0), key...)
 	// check version
-	curV, err := dbSimpleGet([]byte("version"), fk)
+	curV, err := a.dbSimpleGet([]byte("version"), fk)
 	if err != nil {
 		return true // yes, need
 	}
@@ -106,7 +99,7 @@ func needDbEntry(bucket, key []byte, v DbStamp) bool {
 	return v.After(curVT)
 }
 
-func feedDbSet(bucket, key, val []byte, v DbStamp) error {
+func (a *AgentObj) feedDbSet(bucket, key, val []byte, v DbStamp) error {
 	if string(bucket) == "local" || string(bucket) == "fleet" {
 		// bucket "local" cannot be replicated
 		return nil
@@ -115,7 +108,7 @@ func feedDbSet(bucket, key, val []byte, v DbStamp) error {
 	// compute global key (bucket + NUL + key)
 	fk := append(append(bucket, 0), key...)
 	// check version
-	curV, err := dbSimpleGet([]byte("version"), fk)
+	curV, err := a.dbSimpleGet([]byte("version"), fk)
 	if err == nil && len(curV) > 0 {
 		// decode curV
 		var curVT DbStamp
@@ -131,7 +124,7 @@ func feedDbSet(bucket, key, val []byte, v DbStamp) error {
 	}
 
 	// update
-	err = db.Update(func(tx *bolt.Tx) error {
+	err = a.db.Update(func(tx *bolt.Tx) error {
 		vb, err := tx.CreateBucketIfNotExists([]byte("version"))
 		if err != nil {
 			return err
@@ -167,17 +160,17 @@ func feedDbSet(bucket, key, val []byte, v DbStamp) error {
 
 		return b.Put(key, val)
 	})
-	go dbWatchTrigger(string(key), val)
+	go a.dbWatchTrigger(string(key), val)
 	return err
 }
 
-func dbGetVersion(bucket, key []byte) (val []byte, stamp DbStamp, err error) {
+func (a *AgentObj) dbGetVersion(bucket, key []byte) (val []byte, stamp DbStamp, err error) {
 	if string(bucket) == "local" || string(bucket) == "fleet" {
 		// bucket "local" cannot be replicated
 		err = fs.ErrNotExist
 		return
 	}
-	err = db.View(func(tx *bolt.Tx) error {
+	err = a.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucket)
 		if b == nil {
 			return os.ErrNotExist
@@ -201,10 +194,10 @@ func dbGetVersion(bucket, key []byte) (val []byte, stamp DbStamp, err error) {
 	return
 }
 
-func databasePacket() *PacketDbVersions {
+func (a *AgentObj) databasePacket() *PacketDbVersions {
 	p := &PacketDbVersions{}
 
-	if c, err := NewDbCursor([]byte("version")); err == nil {
+	if c, err := a.NewDbCursor([]byte("version")); err == nil {
 		// version global key (bucket + NUL + key)
 		defer c.Close()
 		k, v := c.First()
@@ -230,8 +223,8 @@ func databasePacket() *PacketDbVersions {
 }
 
 // internal setter
-func dbSimpleSet(bucket, key, val []byte) error {
-	return db.Update(func(tx *bolt.Tx) error {
+func (a *AgentObj) dbSimpleSet(bucket, key, val []byte) error {
+	return a.db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists(bucket)
 		if err != nil {
 			return err
@@ -241,8 +234,8 @@ func dbSimpleSet(bucket, key, val []byte) error {
 }
 
 // internal delete
-func dbSimpleDel(bucket, key []byte) error {
-	return db.Update(func(tx *bolt.Tx) error {
+func (a *AgentObj) dbSimpleDel(bucket, key []byte) error {
+	return a.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucket)
 		if b == nil {
 			return nil
@@ -252,8 +245,8 @@ func dbSimpleDel(bucket, key []byte) error {
 }
 
 // internal getter
-func dbSimpleGet(bucket, key []byte) (r []byte, err error) {
-	err = db.View(func(tx *bolt.Tx) error {
+func (a *AgentObj) dbSimpleGet(bucket, key []byte) (r []byte, err error) {
+	err = a.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucket)
 		if b == nil {
 			return os.ErrNotExist
@@ -269,10 +262,10 @@ func dbSimpleGet(bucket, key []byte) (r []byte, err error) {
 	return
 }
 
-func dbFleetGet(keyname string) ([]byte, error) {
+func (a *AgentObj) dbFleetGet(keyname string) ([]byte, error) {
 	// for example keyname="internal_key:jwt"
 
-	data, err := dbSimpleGet([]byte("fleet"), []byte(keyname))
+	data, err := a.dbSimpleGet([]byte("fleet"), []byte(keyname))
 	if err == nil {
 		return data, nil
 	}
@@ -284,9 +277,9 @@ func dbFleetGet(keyname string) ([]byte, error) {
 		filename = strings.TrimSuffix(filename, ".crt") + ".pem"
 	}
 
-	err = getFile(filename, func(v []byte) error {
+	err = a.getFile(filename, func(v []byte) error {
 		data = v
-		return dbSimpleSet([]byte("fleet"), []byte(keyname), v)
+		return a.dbSimpleSet([]byte("fleet"), []byte(keyname), v)
 	})
 	if err == nil {
 		return data, nil
@@ -295,9 +288,9 @@ func dbFleetGet(keyname string) ([]byte, error) {
 	return data, err
 }
 
-func dbFleetDel(keyname string) error {
+func (a *AgentObj) dbFleetDel(keyname string) error {
 	// for example keyname="internal_key:jwt"
-	return dbSimpleDel([]byte("fleet"), []byte(keyname))
+	return a.dbSimpleDel([]byte("fleet"), []byte(keyname))
 }
 
 type DbCursor struct {
@@ -311,9 +304,9 @@ func dbCursorFinalizer(c *DbCursor) {
 	c.tx.Rollback()
 }
 
-func NewDbCursor(bucket []byte) (*DbCursor, error) {
+func (a *AgentObj) NewDbCursor(bucket []byte) (*DbCursor, error) {
 	// create a readonly tx and a cursor
-	tx, err := db.Begin(false)
+	tx, err := a.db.Begin(false)
 	if err != nil {
 		return nil, err
 	}
@@ -377,6 +370,6 @@ func (c *DbCursor) Close() error {
 	return c.tx.Rollback()
 }
 
-func shutdownDb() {
-	db.Close()
+func (a *AgentObj) shutdownDb() {
+	a.db.Close()
 }

@@ -6,6 +6,7 @@ import (
 	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -27,9 +28,6 @@ type seedData struct {
 }
 
 var (
-	// use a pointer for atomic seed details update
-	seed *seedData
-
 	uuidSeedidSpace = uuid.Must(uuid.Parse(UUID_SEEDID_SPACE))
 )
 
@@ -44,15 +42,15 @@ func makeSeed(s []byte, t time.Time) *seedData {
 	}
 }
 
-func initSeed() {
+func (a *AgentObj) initSeed() {
 	// check for seed in db (seed is actually shared, but update rule is different from regular record so we use fleet)
-	if d, err := dbSimpleGet([]byte("fleet"), []byte("seed")); d != nil && err == nil && len(d) > 128 {
+	if d, err := a.dbSimpleGet([]byte("fleet"), []byte("seed")); d != nil && err == nil && len(d) > 128 {
 		// found seed data in db
 		t := time.Time{}
 		if t.UnmarshalBinary(d[128:]) == nil {
 			// managed to read time too!
-			seed = makeSeed(d[:128], t)
-			log.Printf("[fleet] Initialized with saved cluster seed ID = %s", SeedId())
+			a.seed = makeSeed(d[:128], t)
+			log.Printf("[fleet] Initialized with saved cluster seed ID = %s", a.SeedId())
 			return
 		}
 	}
@@ -71,9 +69,9 @@ func initSeed() {
 				t := time.Time{}
 				if t.UnmarshalBinary(tsBin) == nil {
 					// managed to read time too!
-					seed = makeSeed(s, t)
-					log.Printf("[fleet] Initialized with saved cluster seed ID = %s", SeedId())
-					if seed.WriteToDisk() == nil {
+					a.seed = makeSeed(s, t)
+					log.Printf("[fleet] Initialized with saved cluster seed ID = %s", a.SeedId())
+					if a.seed.WriteToDisk(a) == nil {
 						os.Remove("fleet_seed.bin")
 					}
 					return
@@ -87,23 +85,23 @@ func initSeed() {
 		panic(fmt.Sprintf("failed to initialize fleet seed: %s", err))
 	}
 
-	seed = makeSeed(s, time.Now())
-	seed.WriteToDisk()
+	a.seed = makeSeed(s, time.Now())
+	a.seed.WriteToDisk(a)
 
-	log.Printf("[fleet] Initialized with cluster seed ID = %s", SeedId())
+	log.Printf("[fleet] Initialized with cluster seed ID = %s", a.SeedId())
 }
 
-func SeedId() uuid.UUID {
-	return seed.Id
+func (a *AgentObj) SeedId() uuid.UUID {
+	return a.seed.Id
 }
 
-func (s *seedData) WriteToDisk() error {
+func (s *seedData) WriteToDisk(a *AgentObj) error {
 	ts, err := s.ts.MarshalBinary()
 	if err != nil {
 		return err
 	}
 
-	err = dbSimpleSet([]byte("fleet"), []byte("seed"), append(seed.seed, ts...))
+	err = a.dbSimpleSet([]byte("fleet"), []byte("seed"), append(a.seed.seed, ts...))
 
 	if err != nil {
 		return err
@@ -112,21 +110,21 @@ func (s *seedData) WriteToDisk() error {
 	return nil
 }
 
-func SeedTlsConfig(c *tls.Config) {
-	var k [32]byte
-	copy(k[:], seed.seed[32:64])
+func (a *AgentObj) SeedTlsConfig(c *tls.Config) {
+	k := sha256.Sum256(a.seed.seed[32:64])
+	// TODO use hmac
 
 	c.SetSessionTicketKeys([][32]byte{k})
 }
 
-func SeedSign(in []byte) []byte {
-	hmac := hmac.New(sha3.New256, seed.seed)
+func (a *AgentObj) SeedSign(in []byte) []byte {
+	hmac := hmac.New(sha3.New256, a.seed.seed)
 	hmac.Write(in)
 	return hmac.Sum([]byte{})
 }
 
-func SeedCrypt(in []byte) ([]byte, error) {
-	block, err := aes.NewCipher(seed.seed[:32])
+func (a *AgentObj) SeedCrypt(in []byte) ([]byte, error) {
+	block, err := aes.NewCipher(a.seed.seed[:32])
 	if err != nil {
 		return nil, err
 	}
@@ -145,8 +143,8 @@ func SeedCrypt(in []byte) ([]byte, error) {
 	return append(nonce, ciphertext...), nil
 }
 
-func SeedDecrypt(in []byte) ([]byte, error) {
-	block, err := aes.NewCipher(seed.seed[:32])
+func (a *AgentObj) SeedDecrypt(in []byte) ([]byte, error) {
+	block, err := aes.NewCipher(a.seed.seed[:32])
 	if err != nil {
 		return nil, err
 	}
@@ -169,15 +167,15 @@ func SeedDecrypt(in []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-func seedPacket() *PacketSeed {
+func (a *AgentObj) seedPacket() *PacketSeed {
 	return &PacketSeed{
-		Seed: seed.seed,
-		Time: seed.ts,
+		Seed: a.seed.seed,
+		Time: a.seed.ts,
 	}
 }
 
-func handleNewSeed(s []byte, t time.Time) error {
-	cur := seed
+func (a *AgentObj) handleNewSeed(s []byte, t time.Time) error {
+	cur := a.seed
 	if t.After(cur.ts) {
 		// time is more recent, ignore seed
 		return nil
@@ -192,8 +190,8 @@ func handleNewSeed(s []byte, t time.Time) error {
 			return nil
 		}
 	}
-	seed = makeSeed(s, t)
-	seed.WriteToDisk()
-	log.Printf("[fleet] Updated seed from peer, new seed ID = %s", SeedId())
+	a.seed = makeSeed(s, t)
+	a.seed.WriteToDisk(a)
+	log.Printf("[fleet] Updated seed from peer, new seed ID = %s", a.SeedId())
 	return nil
 }

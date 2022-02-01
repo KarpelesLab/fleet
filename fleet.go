@@ -21,6 +21,8 @@ import (
 	"unsafe"
 
 	"github.com/KarpelesLab/jwt"
+	"github.com/KarpelesLab/ringbuf"
+	bolt "go.etcd.io/bbolt"
 )
 
 var (
@@ -30,6 +32,7 @@ var (
 		peers:    make(map[string]*Peer),
 		services: make(map[string]chan net.Conn),
 		rpc:      make(map[uintptr]chan *PacketRpcResponse),
+		dbWatch:  make(map[string]DbWatchCallback),
 	}
 	rpcE map[string]RpcEndpoint
 )
@@ -58,6 +61,20 @@ type AgentObj struct {
 
 	rpc  map[uintptr]chan *PacketRpcResponse
 	rpcL sync.RWMutex
+
+	// log
+	logbuf *ringbuf.Writer
+
+	// DB
+	db          *bolt.DB
+	dbWatch     map[string]DbWatchCallback
+	dbWatchLock sync.RWMutex
+
+	// getfile callback
+	GetFile func(string) ([]byte, error)
+
+	// seed: use a pointer for atomic seed details update
+	seed *seedData
 }
 
 func initAgent(token *jwt.Token) {
@@ -84,13 +101,13 @@ func (a *AgentObj) doInit(token *jwt.Token) (err error) {
 		}
 	}
 
-	a.cert, err = GetInternalCert()
+	a.cert, err = a.GetInternalCert()
 	if err != nil {
 		return
 	}
 
 	// load CA
-	a.ca, _ = GetCA()
+	a.ca, _ = a.GetCA()
 
 	// create tls.Config objects
 	a.inCfg = new(tls.Config)
@@ -575,7 +592,7 @@ func (a *AgentObj) DumpInfo(w io.Writer) {
 	fmt.Fprintf(w, "Local name: %s\n", a.name)
 	fmt.Fprintf(w, "Division:   %s\n", a.division)
 	fmt.Fprintf(w, "Local ID:   %s\n", a.id)
-	fmt.Fprintf(w, "Seed ID:    %s (seed stamp: %s)\n", SeedId(), seed.ts)
+	fmt.Fprintf(w, "Seed ID:    %s (seed stamp: %s)\n", a.SeedId(), a.seed.ts)
 	fmt.Fprintf(w, "\n")
 
 	a.peersMutex.RLock()
@@ -605,7 +622,7 @@ func (a *AgentObj) DumpInfo(w io.Writer) {
 	fmt.Fprintf(w, "DB keys:\n")
 	for _, bk := range []string{"fleet", "global", "app"} {
 		var l []string
-		if c, err := NewDbCursor([]byte(bk)); err == nil {
+		if c, err := a.NewDbCursor([]byte(bk)); err == nil {
 			defer c.Close()
 			k, _ := c.First()
 			for {

@@ -178,7 +178,7 @@ func (p *Peer) handlePacket(pktI interface{}) error {
 		// TODO calculate offset
 		return nil
 	case *PacketSeed:
-		return handleNewSeed(pkt.Seed, pkt.Time)
+		return p.a.handleNewSeed(pkt.Seed, pkt.Time)
 	case *PacketAnnounce:
 		return p.a.handleAnnounce(pkt, p)
 	case *PacketAlive:
@@ -208,7 +208,7 @@ func (p *Peer) handlePacket(pktI interface{}) error {
 			return p.a.TrySendTo(pkt.TargetId, pkt)
 		}
 		// let the db handle that
-		return feedDbSet(pkt.Bucket, pkt.Key, pkt.Val, pkt.Stamp)
+		return p.a.feedDbSet(pkt.Bucket, pkt.Key, pkt.Val, pkt.Stamp)
 	case *PacketDbRequest:
 		if pkt.TargetId != p.a.id {
 			// fw
@@ -218,7 +218,7 @@ func (p *Peer) handlePacket(pktI interface{}) error {
 		return p.handleDbRequest(pkt)
 	case *PacketDbVersions:
 		for _, v := range pkt.Info {
-			if needDbEntry(v.Bucket, v.Key, v.Stamp) {
+			if p.a.needDbEntry(v.Bucket, v.Key, v.Stamp) {
 				if err := p.TrySend(&PacketDbRequest{TargetId: p.id, SourceId: p.a.id, Bucket: v.Bucket, Key: v.Key}); err != nil {
 					return err
 				}
@@ -261,7 +261,7 @@ func (p *Peer) handlePong(pong *PacketPong) {
 }
 
 func (p *Peer) handleDbRequest(pkt *PacketDbRequest) error {
-	val, stamp, err := dbGetVersion([]byte(pkt.Bucket), []byte(pkt.Key))
+	val, stamp, err := p.a.dbGetVersion([]byte(pkt.Bucket), []byte(pkt.Key))
 	if err != nil {
 		// ignore it
 		return nil
@@ -433,6 +433,6 @@ func (p *Peer) sendHandshake(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	p.Send(ctx, databasePacket())
-	return p.Send(ctx, seedPacket())
+	p.Send(ctx, p.a.databasePacket())
+	return p.Send(ctx, p.a.seedPacket())
 }

@@ -18,8 +18,8 @@ import (
 	"github.com/google/uuid"
 )
 
-func getLocalKey() (crypto.Signer, error) {
-	keyPem, err := dbFleetGet("internal_key:key")
+func (a *AgentObj) getLocalKey() (crypto.Signer, error) {
+	keyPem, err := a.dbFleetGet("internal_key:key")
 	if err != nil {
 		// gen & save a new key
 		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -34,7 +34,7 @@ func getLocalKey() (crypto.Signer, error) {
 		// encode to PEM
 		key_pem := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: key_der})
 		// store in DB
-		dbSimpleSet([]byte("fleet"), []byte("internal_key:key"), key_pem)
+		a.dbSimpleSet([]byte("fleet"), []byte("internal_key:key"), key_pem)
 
 		return key, nil
 	}
@@ -57,7 +57,7 @@ func getLocalKey() (crypto.Signer, error) {
 	return nil, fmt.Errorf("failed to convert key type %T into crypto.Signer", keyIntf)
 }
 
-func GenInternalCert() (tls.Certificate, error) {
+func (a *AgentObj) GenInternalCert() (tls.Certificate, error) {
 	log.Printf("[tls] Generating new CA & client certificates")
 	// generate a new CA & certificate
 	ca_key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -66,7 +66,7 @@ func GenInternalCert() (tls.Certificate, error) {
 	}
 
 	// get key
-	key, err := getLocalKey()
+	key, err := a.getLocalKey()
 	if err != nil {
 		return tls.Certificate{}, err
 	}
@@ -122,22 +122,22 @@ func GenInternalCert() (tls.Certificate, error) {
 	ca_key_pem := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: ca_key_der})
 
 	// store
-	dbSimpleSet([]byte("fleet"), []byte("internal_key:crt"), crt_pem)
-	dbSimpleSet([]byte("global"), []byte("internal:ca:master"), ca_crt_pem)
-	dbSimpleSet([]byte("fleet"), []byte("ca_key:key"), ca_key_pem)
+	a.dbSimpleSet([]byte("fleet"), []byte("internal_key:crt"), crt_pem)
+	a.dbSimpleSet([]byte("global"), []byte("internal:ca:master"), ca_crt_pem)
+	a.dbSimpleSet([]byte("fleet"), []byte("ca_key:key"), ca_key_pem)
 
 	log.Printf("[tls] New certificate: %s%s%s", ca_crt_pem, ca_key_pem, crt_pem)
 
 	return tls.Certificate{Certificate: [][]byte{crt_der}, PrivateKey: key}, nil
 }
 
-func GetInternalCert() (tls.Certificate, error) {
+func (a *AgentObj) GetInternalCert() (tls.Certificate, error) {
 	// get internal certificate
-	crt, err := dbFleetGet("internal_key:crt")
+	crt, err := a.dbFleetGet("internal_key:crt")
 	if err != nil {
 		return tls.Certificate{}, err
 	}
-	key, err := dbFleetGet("internal_key:key")
+	key, err := a.dbFleetGet("internal_key:key")
 	if err != nil {
 		return tls.Certificate{}, err
 	}
@@ -145,13 +145,13 @@ func GetInternalCert() (tls.Certificate, error) {
 	return tls.X509KeyPair(crt, key)
 }
 
-func GetDefaultPublicCert() (tls.Certificate, error) {
+func (a *AgentObj) GetDefaultPublicCert() (tls.Certificate, error) {
 	// get internal certificate
-	crt, err := dbFleetGet("public_key:crt")
+	crt, err := a.dbFleetGet("public_key:crt")
 	if err != nil {
 		return tls.Certificate{}, err
 	}
-	key, err := dbFleetGet("public_key:key")
+	key, err := a.dbFleetGet("public_key:key")
 	if err != nil {
 		return tls.Certificate{}, err
 	}
@@ -159,11 +159,11 @@ func GetDefaultPublicCert() (tls.Certificate, error) {
 	return tls.X509KeyPair(crt, key)
 }
 
-func GetCA() (*x509.CertPool, error) {
+func (a *AgentObj) GetCA() (*x509.CertPool, error) {
 	ca := x509.NewCertPool()
 
 	// get records
-	c, err := NewDbCursor([]byte("global"))
+	c, err := a.NewDbCursor([]byte("global"))
 	count := 0
 
 	if err == nil {
@@ -181,10 +181,10 @@ func GetCA() (*x509.CertPool, error) {
 
 	if count == 0 {
 		// nothing found in db, check for file?
-		err := getFile("internal_ca.pem", func(ca_data []byte) error {
+		err := a.getFile("internal_ca.pem", func(ca_data []byte) error {
 			ca.AppendCertsFromPEM(ca_data)
 			// store in db
-			err = dbSimpleSet([]byte("global"), []byte("internal:ca:legacy_import"), ca_data)
+			err = a.dbSimpleSet([]byte("global"), []byte("internal:ca:legacy_import"), ca_data)
 			return nil
 		})
 		if err != nil {
@@ -197,37 +197,37 @@ func GetCA() (*x509.CertPool, error) {
 
 // GetTlsConfig returns TLS config suitable for making public facing ssl
 // servers.
-func GetTlsConfig() (*tls.Config, error) {
-	if cert, err := GetDefaultPublicCert(); err == nil {
+func (a *AgentObj) GetTlsConfig() (*tls.Config, error) {
+	if cert, err := a.GetDefaultPublicCert(); err == nil {
 		cfg := new(tls.Config)
 		cfg.Certificates = []tls.Certificate{cert}
-		SeedTlsConfig(cfg)
-		ConfigureTlsServer(cfg)
+		a.SeedTlsConfig(cfg)
+		a.ConfigureTlsServer(cfg)
 		return cfg, nil
 	}
 
-	if cert, err := GetInternalCert(); err == nil {
+	if cert, err := a.GetInternalCert(); err == nil {
 		cfg := new(tls.Config)
 		cfg.Certificates = []tls.Certificate{cert}
-		SeedTlsConfig(cfg)
-		ConfigureTlsServer(cfg)
-		return cfg, nil
-	}
-
-	return nil, errors.New("failed to load TLS certificates")
-}
-
-func GetClientTlsConfig() (*tls.Config, error) {
-	if cert, err := GetInternalCert(); err == nil {
-		cfg := new(tls.Config)
-		cfg.Certificates = []tls.Certificate{cert}
+		a.SeedTlsConfig(cfg)
+		a.ConfigureTlsServer(cfg)
 		return cfg, nil
 	}
 
 	return nil, errors.New("failed to load TLS certificates")
 }
 
-func ConfigureTlsServer(cfg *tls.Config) {
+func (a *AgentObj) GetClientTlsConfig() (*tls.Config, error) {
+	if cert, err := a.GetInternalCert(); err == nil {
+		cfg := new(tls.Config)
+		cfg.Certificates = []tls.Certificate{cert}
+		return cfg, nil
+	}
+
+	return nil, errors.New("failed to load TLS certificates")
+}
+
+func (a *AgentObj) ConfigureTlsServer(cfg *tls.Config) {
 	// perform some basic settings to ensure server is secure
 	cfg.MinVersion = tls.VersionTLS12
 	cfg.CurvePreferences = []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256}

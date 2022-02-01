@@ -11,11 +11,7 @@ import (
 	"github.com/KarpelesLab/goupd"
 )
 
-var (
-	GetFile func(string) ([]byte, error)
-)
-
-func initPath() {
+func (a *AgentObj) initPath() {
 	if goupd.PROJECT_NAME != "unconfigured" {
 		// chdir to cache
 		c, err := os.UserCacheDir()
@@ -69,9 +65,9 @@ func findFile(filename string) (string, error) {
 	return "", fs.ErrNotExist
 }
 
-func getFile(filename string, cb func([]byte) error) error {
-	if GetFile != nil {
-		v, err := GetFile(filename)
+func (a *AgentObj) getFile(filename string, cb func([]byte) error) error {
+	if a.GetFile != nil {
+		v, err := a.GetFile(filename)
 		if err != nil {
 			return err
 		}

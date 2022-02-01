@@ -8,29 +8,29 @@ import (
 	"github.com/KarpelesLab/ringbuf"
 )
 
-var logbuf *ringbuf.Writer
-
-func initLog() {
+func (a *AgentObj) initLog() {
 	var err error
 
-	logbuf, err = ringbuf.New(1024 * 1024)
+	a.logbuf, err = ringbuf.New(1024 * 1024)
 	if err == nil {
-		log.SetOutput(io.MultiWriter(os.Stdout, logbuf))
+		log.SetOutput(io.MultiWriter(os.Stderr, a.logbuf))
 	} else {
 		log.Printf("[fleet] Failed to setup logbuf: %s", err)
 	}
 }
 
-func LogTarget() io.Writer {
-	return logbuf
+func (a *AgentObj) LogTarget() io.Writer {
+	return a.logbuf
 }
 
-func LogDmesg(w io.Writer) (int64, error) {
-	r := logbuf.Reader()
+func (a *AgentObj) LogDmesg(w io.Writer) (int64, error) {
+	r := a.logbuf.Reader()
 	defer r.Close()
 	return io.Copy(w, r)
 }
 
-func shutdownLog() {
-	logbuf.Close()
+func (a *AgentObj) shutdownLog() {
+	// return output to normal first
+	log.SetOutput(os.Stderr)
+	a.logbuf.Close()
 }

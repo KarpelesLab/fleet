@@ -2,14 +2,14 @@ package fleet
 
 // perform init of various elements in order
 func Init() {
-	initLog()
-	initPath()
-	initDb()
-	initSeed()
-	directoryThread()
+	Agent.initLog()
+	Agent.initPath()
+	Agent.initDb()
+	Agent.initSeed()
+	Agent.directoryThread()
 }
 
 func Shutdown() {
-	shutdownDb()
-	shutdownLog()
+	Agent.shutdownDb()
+	Agent.shutdownLog()
 }

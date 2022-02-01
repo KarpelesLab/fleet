@@ -42,8 +42,8 @@ type directoryPingResponse struct {
 	Namespace *directoryNs
 }
 
-func directoryThread() {
-	if directoryThreadStart() {
+func (a *AgentObj) directoryThread() {
+	if a.directoryThreadStart() {
 		return
 	}
 
@@ -52,14 +52,14 @@ func directoryThread() {
 			// wait
 			time.Sleep(15 * time.Minute)
 			// and retry
-			if directoryThreadStart() {
+			if a.directoryThreadStart() {
 				return
 			}
 		}
 	}()
 }
 
-func directoryThreadStart() bool {
+func (a *AgentObj) directoryThreadStart() bool {
 	// this is run in its own gorouting after db is setup
 	defer func() {
 		// ensure this thread crashing doesn't take the whole process
@@ -69,7 +69,7 @@ func directoryThreadStart() bool {
 	}()
 
 	// attempt to load jwt
-	jwtData, err := dbFleetGet("internal_key:jwt")
+	jwtData, err := a.dbFleetGet("internal_key:jwt")
 	if err != nil {
 		// attempt to get issuer to give us a key
 		log.Printf("[fleet] failed to load jwt: %s (will retry later)", err)
@@ -92,7 +92,7 @@ func directoryThreadStart() bool {
 	if err != nil {
 		log.Printf("[fleet] failed to parse jwt key: %s", err)
 		log.Printf("[fleet] removing invalid jwt from database")
-		dbFleetDel("internal_key:jwt")
+		a.dbFleetDel("internal_key:jwt")
 		return false
 	}
 	// keyObj is a *rsa.PublicKey, *dsa.PublicKey, *ecdsa.PublicKey, or ed25519.PublicKey
@@ -100,7 +100,7 @@ func directoryThreadStart() bool {
 	if err != nil {
 		log.Printf("[fleet] failed to verify jwt: %s", err)
 		log.Printf("[fleet] removing invalid jwt from database")
-		dbFleetDel("internal_key:jwt")
+		a.dbFleetDel("internal_key:jwt")
 		return false
 	}
 
@@ -113,7 +113,7 @@ func directoryThreadStart() bool {
 	}
 
 	// jwt contains our jwt token, load the certificate too
-	cfg, err := GetClientTlsConfig()
+	cfg, err := a.GetClientTlsConfig()
 	if err != nil {
 		log.Printf("[fleet] failed to get client TLS certificate, directory service disabled: %s", err)
 		return false
