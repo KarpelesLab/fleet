@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"os"
 	"runtime"
 	"sort"
 	"strings"
@@ -70,9 +71,14 @@ type AgentObj struct {
 }
 
 func New() *AgentObj {
+	local := "local"
+	if host, err := os.Hostname(); err == nil && host != "" {
+		local = host
+	}
+
 	a := &AgentObj{
-		id:       "local",
-		name:     "local",
+		id:       local,
+		name:     local,
 		peers:    make(map[string]*Peer),
 		services: make(map[string]chan net.Conn),
 		rpc:      make(map[uintptr]chan *PacketRpcResponse),
