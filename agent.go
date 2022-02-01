@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"log"
 	"math/rand"
 	"net"
@@ -24,10 +23,6 @@ import (
 	"github.com/KarpelesLab/jwt"
 	"github.com/KarpelesLab/ringbuf"
 	bolt "go.etcd.io/bbolt"
-)
-
-var (
-	rpcE = make(map[string]RpcEndpoint)
 )
 
 type GetFileFunc func(string) ([]byte, error)
@@ -193,20 +188,6 @@ func (a *Agent) Id() string {
 
 func (a *Agent) Name() (string, string) {
 	return a.name, a.hostname
-}
-
-func SetRpcEndpoint(e string, f RpcEndpoint) {
-	rpcE[e] = f
-}
-
-// CallRpcEndpoint will call the named RPC endpoint on the local machine
-func CallRpcEndpoint(e string, p interface{}) (interface{}, error) {
-	ep, ok := rpcE[e]
-	if !ok {
-		return nil, fs.ErrNotExist
-	}
-
-	return ep(p)
 }
 
 func (a *Agent) BroadcastRpc(ctx context.Context, endpoint string, data interface{}) error {
@@ -448,41 +429,15 @@ func (a *Agent) handleRpc(pkt *PacketRpc) error {
 
 	ctx := context.Background()
 
-	cb, ok := rpcE[pkt.Endpoint]
-
-	if !ok || cb == nil {
-		if pkt.R != 0 {
-			res.Error = "RPC: endpoint not found"
-			res.HasError = true
-			return a.SendTo(ctx, res.TargetId, res)
-		}
-		return nil
-	}
-
 	if pkt.R == 0 {
 		// no return
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("[fleet] Panic in RPC: %s", r)
-				}
-			}()
-
-			cb(pkt.Data)
-		}()
+		CallRpcEndpoint(pkt.Endpoint, pkt.Data)
 		return nil
 	}
 
 	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				res.Error = fmt.Sprintf("RPC Panic: %s", r)
-				res.HasError = true
-			}
-		}()
-
 		var err error
-		res.Data, err = cb(pkt.Data)
+		res.Data, err = CallRpcEndpoint(pkt.Endpoint, pkt.Data)
 		if err != nil {
 			res.Error = err.Error()
 			res.HasError = true
