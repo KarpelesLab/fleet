@@ -599,20 +599,6 @@ func (a *Agent) doBroadcast(ctx context.Context, pkt Packet, except_id string) {
 	}
 }
 
-type SortablePeers []*Peer
-
-func (s SortablePeers) Len() int {
-	return len(s)
-}
-
-func (s SortablePeers) Less(i, j int) bool {
-	return s[i].name < s[j].name
-}
-
-func (s SortablePeers) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-
 func (a *Agent) DumpInfo(w io.Writer) {
 	fmt.Fprintf(w, "Fleet Agent Information\n")
 	fmt.Fprintf(w, "=======================\n\n")
@@ -624,7 +610,7 @@ func (a *Agent) DumpInfo(w io.Writer) {
 
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
-	t := make(SortablePeers, 0, len(a.peers))
+	t := make(sortablePeers, 0, len(a.peers))
 
 	for _, p := range a.peers {
 		t = append(t, p)
@@ -691,6 +677,9 @@ func (a *Agent) GetPeers() []*Peer {
 	for _, p := range a.peers {
 		res = append(res, p)
 	}
+
+	sort.Sort(sortablePeers(res))
+
 	return res
 }
 
