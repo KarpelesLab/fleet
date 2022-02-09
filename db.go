@@ -36,9 +36,9 @@ func (a *Agent) initDb() {
 }
 
 // simple db get for program usage
-func (a *Agent) DbGet(key string) (string, error) {
+func (a *Agent) DbGet(key string) ([]byte, error) {
 	v, err := a.dbSimpleGet([]byte("app"), []byte(key))
-	return string(v), err
+	return v, err
 }
 
 // simple db set for program usage
