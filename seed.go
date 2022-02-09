@@ -117,6 +117,20 @@ func (a *Agent) SeedTlsConfig(c *tls.Config) {
 	c.SetSessionTicketKeys([][32]byte{k})
 }
 
+func (a *Agent) SeedShake128(N, S []byte) sha3.ShakeHash {
+	v := sha3.NewCShake128(N, S)
+	v.Write(a.seed.seed)
+
+	return v
+}
+
+func (a *Agent) SeedShake256(N, S []byte) sha3.ShakeHash {
+	v := sha3.NewCShake256(N, S)
+	v.Write(a.seed.seed)
+
+	return v
+}
+
 func (a *Agent) SeedSign(in []byte) []byte {
 	hmac := hmac.New(sha3.New256, a.seed.seed)
 	hmac.Write(in)
