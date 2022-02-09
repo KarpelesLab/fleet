@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"runtime/debug"
 	"time"
 
 	"github.com/KarpelesLab/goupd"
@@ -64,7 +65,7 @@ func (a *Agent) directoryThreadStart() bool {
 	defer func() {
 		// ensure this thread crashing doesn't take the whole process
 		if e := recover(); e != nil {
-			log.Printf("[fleet] directory thread panic'd, disabling safely. Error: %s", e)
+			log.Printf("[fleet] directory thread panic'd, disabling safely. Error: %s\n%s", e, debug.Stack())
 		}
 	}()
 
