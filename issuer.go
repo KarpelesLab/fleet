@@ -20,7 +20,7 @@ import (
 	"github.com/KarpelesLab/goupd"
 )
 
-func WithIssuer(url string) (a *Agent) {
+func WithIssuer(url string) *Agent {
 	// this means that GetFile(internal_key.jwt) and such should call our issuer
 	//
 
@@ -33,7 +33,7 @@ func WithIssuer(url string) (a *Agent) {
 	// signature, should verify additional information (source ip, etc) and decide
 	// to issue or not the requested file.
 
-	return WithGetFile(func(f string) ([]byte, error) {
+	return WithGetFile(func(a *Agent, f string) ([]byte, error) {
 		if f == "internal_key.key" {
 			// this will result in a loop call when using getLocalKey(), so reject it now
 			return nil, fs.ErrNotExist

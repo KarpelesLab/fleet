@@ -25,7 +25,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-type GetFileFunc func(string) ([]byte, error)
+type GetFileFunc func(*Agent, string) ([]byte, error)
 
 type Agent struct {
 	socket net.Listener

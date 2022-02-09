@@ -67,7 +67,7 @@ func findFile(filename string) (string, error) {
 
 func (a *Agent) getFile(filename string, cb func([]byte) error) error {
 	if a.GetFile != nil {
-		v, err := a.GetFile(filename)
+		v, err := a.GetFile(a, filename)
 		if err != nil {
 			return err
 		}
