@@ -34,6 +34,7 @@ type Agent struct {
 	name     string
 	division string
 	hostname string // only the hostname side
+	IP       string // ip as seen from outside
 
 	inCfg  *tls.Config
 	outCfg *tls.Config

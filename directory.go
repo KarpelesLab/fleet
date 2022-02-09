@@ -196,6 +196,7 @@ func (a *Agent) jwtPingDirectory(dir string, jwt []byte, client *http.Client) er
 	// {"Myself":{"Name":"jp001","Version":"20211010151149/8fed26f","TimeOffset":53348333,"Private":{"Division":"clfd-qepiqm-ufgr-hh3d-v4p5-twwxysdy","Id":"clfdh-d27zrv-bymj-fb3i-fn5x-upy5awea"},"LastSeen":"2021-10-10T09:20:12.006662333Z","IP":"13.230.154.155","Token":"
 
 	//log.Printf("[fleet] debug ping response: %+v", res)
+	a.IP = res.Myself.IP
 
 	for _, peer := range res.Namespace.Peers {
 		// check if we're connected
