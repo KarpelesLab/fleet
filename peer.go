@@ -282,6 +282,8 @@ func (p *Peer) handlePacket(pktI interface{}) error {
 		}
 		// we don't really care about the source, just do the rpc thing
 		return p.a.handleRpc(pkt)
+	case *PacketRpcResponse:
+		return p.a.handleRpcResponse(pkt)
 	case *PacketDbRecord:
 		if pkt.TargetId != p.a.id {
 			// fw

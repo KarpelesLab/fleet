@@ -532,6 +532,28 @@ func (a *Agent) handleRpc(pkt *PacketRpc) error {
 	return a.SendTo(ctx, res.TargetId, res)
 }
 
+func (a *Agent) handleRpcResponse(pkt *PacketRpcResponse) error {
+	a.rpcL.Lock()
+	defer a.rpcL.Unlock()
+
+	c, ok := a.rpc[pkt.R]
+	if !ok {
+		return nil
+	}
+
+	t := time.NewTimer(time.Second)
+	defer t.Stop()
+
+	select {
+	case c <- pkt:
+		// OK
+		return nil
+	case <-t.C:
+		// timeout
+		return nil
+	}
+}
+
 func (a *Agent) dialPeer(host, name string, id string) {
 	if id == a.id {
 		// avoid connect to self
