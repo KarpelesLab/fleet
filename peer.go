@@ -492,7 +492,14 @@ func (p *Peer) Writev(buf ...[]byte) (n int, err error) {
 
 func (p *Peer) WritePacket(pc uint16, data []byte) error {
 	pcBin := []byte{byte(pc >> 8), byte(pc)}
-	_, err := p.Writev(pcBin, data)
+	ln := len(data)
+	lnBin := []byte{
+		byte(ln >> 24),
+		byte(ln >> 16),
+		byte(ln >> 8),
+		byte(ln),
+	}
+	_, err := p.Writev(pcBin, lnBin, data)
 	return err
 }
 
