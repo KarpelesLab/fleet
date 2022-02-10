@@ -570,7 +570,7 @@ func (a *Agent) dialPeer(host, name string, id string) {
 
 	cfg := a.outCfg.Clone()
 	cfg.ServerName = id
-	cfg.NextProtos = []string{"fleet", "fbin"} // keep "fleet" as default proto
+	cfg.NextProtos = []string{"fbin", "fleet"}
 
 	c, err := tls.Dial("tcp", host+":61337", cfg)
 	if err != nil {
