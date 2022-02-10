@@ -420,7 +420,11 @@ func (a *Agent) AllRPC(ctx context.Context, endpoint string, data interface{}) (
 	for {
 		select {
 		case v := <-res:
-			final = append(final, v)
+			if v.HasError {
+				final = append(final, errors.New(v.Error))
+			} else {
+				final = append(final, v.Data)
+			}
 			if len(final) == n {
 				return final, nil
 			}

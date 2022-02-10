@@ -6,6 +6,8 @@ import (
 	"log"
 )
 
+type RpcEndpoint func(interface{}) (interface{}, error)
+
 var (
 	rpcE = make(map[string]RpcEndpoint)
 )

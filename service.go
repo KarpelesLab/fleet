@@ -17,8 +17,6 @@ type ServiceConn struct {
 	net.Conn
 }
 
-type RpcEndpoint func(interface{}) (interface{}, error)
-
 func (a *Agent) RoundTripper() http.RoundTripper {
 	return a.transport
 }
