@@ -10,7 +10,6 @@ func init() {
 	gob.Register(&PacketAnnounce{})
 	gob.Register(&PacketAlive{})
 	gob.Register(&PacketSeed{})
-	gob.Register(&PacketPong{})
 	gob.Register(&PacketRpc{})
 	gob.Register(&PacketRpcResponse{})
 	gob.Register(&PacketDbRecord{})
@@ -18,7 +17,6 @@ func init() {
 	gob.Register(&PacketDbVersions{})
 	gob.Register(&PacketDbVersionsEntry{})
 	gob.Register(&PacketDbRequest{})
-	gob.Register(&PacketClose{})
 }
 
 type Packet interface{}
@@ -49,12 +47,6 @@ type PacketAlive struct {
 type PacketSeed struct {
 	Seed []byte
 	Time time.Time
-}
-
-type PacketPong struct {
-	TargetId string
-	SourceId string
-	Now      time.Time
 }
 
 type PacketRpc struct {
@@ -99,8 +91,4 @@ type PacketDbRequest struct {
 	SourceId string
 	Bucket   []byte // typically "app"
 	Key      []byte
-}
-
-type PacketClose struct {
-	Reason string
 }

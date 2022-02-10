@@ -1,11 +1,14 @@
 package fleet
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/asn1"
+	"encoding/binary"
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -34,11 +37,13 @@ type Peer struct {
 	aliveTime time.Time
 	timeOfft  time.Duration
 	Ping      time.Duration
+	binary    bool // if true, use new binary protocol
 
 	a *Agent
 
 	mutex sync.RWMutex
 	unreg sync.Once
+	write sync.Mutex
 
 	alive chan struct{}
 }
@@ -61,7 +66,10 @@ func (a *Agent) newConn(c net.Conn) {
 
 	switch tc.ConnectionState().NegotiatedProtocol {
 	case "fleet":
-		a.handleFleetConn(tc)
+		a.handleFleetConn(tc, false)
+		return
+	case "fbin":
+		a.handleFleetConn(tc, true)
 		return
 	case "p2p":
 		a.handleServiceConn(tc)
@@ -72,7 +80,7 @@ func (a *Agent) newConn(c net.Conn) {
 	}
 }
 
-func (a *Agent) handleFleetConn(tc *tls.Conn) {
+func (a *Agent) handleFleetConn(tc *tls.Conn, isBin bool) {
 	// instanciate peer and fetch certificate
 	p := &Peer{
 		c:         tc,
@@ -84,6 +92,7 @@ func (a *Agent) handleFleetConn(tc *tls.Conn) {
 		annTime:   time.Now(),
 		sendQueue: make(chan Packet, 32),
 		valid:     true,
+		binary:    isBin,
 	}
 	err := p.fetchUuidFromCertificate()
 	if err != nil {
@@ -101,8 +110,14 @@ func (a *Agent) handleFleetConn(tc *tls.Conn) {
 
 	go p.sendHandshake(context.Background()) // will disappear
 	go p.register()
-	go p.loop()
-	go p.writeLoop()
+
+	if isBin {
+		go p.loop()
+		go p.writeLoop()
+	} else {
+		go p.loopLegacy()
+		go p.writeLoopLegacy()
+	}
 	go p.monitor()
 }
 
@@ -112,6 +127,81 @@ func (p *Peer) retryLater(t time.Duration) {
 }
 
 func (p *Peer) loop() {
+	defer p.unregister()
+	defer p.c.Close()
+
+	// read from peer
+	for {
+		var pc uint16 // packet code
+		var ln uint32 // packet len
+		var buf []byte
+
+		err := binary.Read(p.c, binary.BigEndian, &pc)
+		if err == nil {
+			err = binary.Read(p.c, binary.BigEndian, &ln)
+		}
+		if err == nil {
+			if ln > PacketMaxLen {
+				// too large
+				err = fmt.Errorf("rejected packet too large (%d bytes)", ln)
+			} else {
+				buf = make([]byte, ln)
+				_, err = io.ReadFull(p.c, buf)
+			}
+		}
+		if err == nil {
+			err = p.handleBinary(pc, buf)
+		}
+
+		if err != nil {
+			if err == io.EOF {
+				log.Printf("[fleet] disconnected peer %s (received EOF)", p.id)
+			} else {
+				log.Printf("[fleet] failed to read from peer %s: %s", p.id, err)
+			}
+
+			if p.valid {
+				go p.retryLater(10 * time.Second)
+			}
+
+			return
+		}
+	}
+}
+
+func (p *Peer) handleBinary(pc uint16, data []byte) error {
+	switch pc {
+	case PacketLegacy:
+		return p.handleLegacy(data)
+	case PacketPing:
+		return p.WritePacket(PacketPong, data)
+	case PacketPong:
+		var t DbStamp
+		err := t.UnmarshalBinary(data)
+		if err != nil {
+			return err
+		}
+		p.Ping = time.Since(time.Time(t))
+		return nil
+	case PacketClose:
+		log.Printf("[fleet] Closing peer connection because: %s", data)
+		return io.EOF
+	}
+	return nil
+}
+
+func (p *Peer) handleLegacy(data []byte) error {
+	dec := gob.NewDecoder(bytes.NewReader(data))
+	var pkt Packet
+
+	err := dec.Decode(&pkt)
+	if err != nil {
+		return err
+	}
+	return p.handlePacket(pkt)
+}
+
+func (p *Peer) loopLegacy() {
 	// read from peer
 	dec := gob.NewDecoder(p.c)
 	var pkt Packet
@@ -185,16 +275,6 @@ func (p *Peer) handlePacket(pktI interface{}) error {
 		p.aliveTime = time.Now()
 		p.timeOfft = p.aliveTime.Sub(pkt.Now)
 		return nil
-	case *PacketPong:
-		if pkt.TargetId != p.a.id {
-			// forward
-			return p.a.TrySendTo(pkt.TargetId, pkt)
-		}
-		sp := p.a.GetPeer(pkt.SourceId)
-		if sp != nil {
-			sp.handlePong(pkt)
-		}
-		return nil
 	case *PacketRpc:
 		if pkt.TargetId != p.a.id {
 			// fw
@@ -225,9 +305,6 @@ func (p *Peer) handlePacket(pktI interface{}) error {
 			}
 		}
 		return nil
-	case *PacketClose:
-		log.Printf("[fleet] Closed connection to peer %s: %s", p.id, pkt.Reason)
-		return io.EOF
 	default:
 		return errors.New("unsupported packet")
 	}
@@ -247,17 +324,12 @@ func (p *Peer) processAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 	atomic.StoreUint32(&p.numG, ann.NumG)
 
 	// send response
-	p.a.TrySendTo(ann.Id, &PacketPong{TargetId: ann.Id, SourceId: p.a.id, Now: ann.Now})
+	//p.a.TrySendTo(ann.Id, &PacketPong{TargetId: ann.Id, SourceId: p.a.id, Now: ann.Now})
 
 	// broadcast
 	//p.a.doBroadcast(ann, fromPeer.id)
 
 	return nil
-}
-
-func (p *Peer) handlePong(pong *PacketPong) {
-	// store pong info
-	p.Ping = time.Since(pong.Now)
 }
 
 func (p *Peer) handleDbRequest(pkt *PacketDbRequest) error {
@@ -344,6 +416,36 @@ func (p *Peer) TrySend(pkt Packet) error {
 func (p *Peer) writeLoop() {
 	defer p.c.Close()
 	t := time.NewTicker(5 * time.Second)
+
+	for {
+		select {
+		case <-p.alive:
+			// closed channel
+			return
+		case now := <-t.C:
+			// send new alive packet
+			err := p.WritePacket(PacketPing, DbStamp(now).Bytes())
+			if err != nil {
+				log.Printf("[fleet] Write to peer failed: %s", err)
+				return
+			}
+		case pkt := <-p.sendQueue:
+			// legacy packet
+			buf := &bytes.Buffer{}
+			enc := gob.NewEncoder(buf)
+			enc.Encode(&pkt) // & is important
+			err := p.WritePacket(PacketLegacy, buf.Bytes())
+			if err != nil {
+				log.Printf("[fleet] Write to peer failed: %s", err)
+				return
+			}
+		}
+	}
+}
+
+func (p *Peer) writeLoopLegacy() {
+	defer p.c.Close()
+	t := time.NewTicker(5 * time.Second)
 	enc := gob.NewEncoder(p.c)
 
 	for {
@@ -371,21 +473,35 @@ func (p *Peer) writeLoop() {
 	}
 }
 
+func (p *Peer) Writev(buf ...[]byte) (n int, err error) {
+	p.write.Lock()
+	defer p.write.Unlock()
+
+	for _, b := range buf {
+		sn, serr := p.c.Write(b)
+		if sn > 0 {
+			n += sn
+		}
+		if serr != nil {
+			err = serr
+			return
+		}
+	}
+	return
+}
+
+func (p *Peer) WritePacket(pc uint16, data []byte) error {
+	pcBin := []byte{byte(pc >> 8), byte(pc)}
+	_, err := p.Writev(pcBin, data)
+	return err
+}
+
 func (p *Peer) Close(reason string) error {
 	log.Printf("[fleet] Closing connection to %s: %s", p.id, reason)
-	err := p.TrySend(&PacketClose{Reason: reason})
+	p.c.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	err := p.WritePacket(PacketClose, []byte(reason))
 	if err != nil {
 		return err
-	}
-	// wait for actual close
-	t := time.NewTimer(time.Second)
-	defer t.Stop()
-
-	select {
-	case <-p.alive:
-		// remote closed
-	case <-t.C:
-		// timeout
 	}
 	return p.c.Close()
 }

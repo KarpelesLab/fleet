@@ -1,8 +1,8 @@
 package fleet
 
 import (
-	"bytes"
 	"encoding/binary"
+	"errors"
 	"time"
 )
 
@@ -29,31 +29,25 @@ func (t DbStamp) String() string {
 	return time.Time(t).String()
 }
 
+func (t DbStamp) Bytes() []byte {
+	r := make([]byte, 16)
+	binary.BigEndian.PutUint64(r[:8], uint64(time.Time(t).Unix()))
+	binary.BigEndian.PutUint64(r[8:], uint64(time.Time(t).Nanosecond()))
+	return r
+}
+
 func (t DbStamp) MarshalBinary() ([]byte, error) {
-	var b bytes.Buffer
-	err := binary.Write(&b, binary.BigEndian, time.Time(t).Unix())
-	if err != nil {
-		return nil, err
-	}
-	err = binary.Write(&b, binary.BigEndian, int64(time.Time(t).Nanosecond()))
-	if err != nil {
-		return nil, err
-	}
-	return b.Bytes(), nil
+	return t.Bytes(), nil
 }
 
 func (t *DbStamp) UnmarshalBinary(data []byte) error {
 	// read a timestamp (inverse of MarshalBinary)
-	r := bytes.NewReader(data)
-	var ut, un int64
-	err := binary.Read(r, binary.BigEndian, &ut)
-	if err != nil {
-		return err
+	if len(data) != 16 {
+		return errors.New("invalid DbStamp unmarshal: bad data length")
 	}
-	err = binary.Read(r, binary.BigEndian, &un)
-	if err != nil {
-		return err
-	}
+
+	ut := int64(binary.BigEndian.Uint64(data[:8]))
+	un := int64(binary.BigEndian.Uint64(data[8:]))
 	*t = DbStamp(time.Unix(ut, un))
 	return nil
 }

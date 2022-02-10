@@ -157,7 +157,7 @@ func (a *Agent) doInit(token *jwt.Token) (err error) {
 	a.inCfg.RootCAs = a.ca
 	a.outCfg.RootCAs = a.ca
 
-	a.inCfg.NextProtos = []string{"fleet", "p2p"}
+	a.inCfg.NextProtos = []string{"fleet", "fbin", "p2p"}
 
 	// configure client auth
 	a.inCfg.ClientAuth = tls.RequireAndVerifyClientCert
@@ -376,6 +376,84 @@ func (a *Agent) DivisionPrefixRpc(ctx context.Context, divMatch string, endpoint
 	return nil
 }
 
+func (a *Agent) AllRPC(ctx context.Context, endpoint string, data interface{}) ([]interface{}, error) {
+	// call method on ALL hosts and collect responses
+
+	// put a timeout on context just in case
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// build response pipe
+	res := make(chan *PacketRpcResponse)
+	resId := uintptr(unsafe.Pointer(&res))
+	a.rpcL.Lock()
+	a.rpc[resId] = res
+	a.rpcL.Unlock()
+
+	defer func() {
+		a.rpcL.Lock()
+		delete(a.rpc, resId)
+		a.rpcL.Unlock()
+	}()
+
+	// prepare request
+	pkt := &PacketRpc{
+		SourceId: a.id,
+		R:        resId,
+		Endpoint: endpoint,
+		Data:     data,
+	}
+
+	// send request
+	n, err := a.broadcastRpcPacket(ctx, pkt)
+	if err != nil {
+		return nil, err
+	}
+	if n == 0 {
+		// no error, no nothing
+		return nil, nil
+	}
+
+	// collect responses
+	var final []interface{}
+
+	for {
+		select {
+		case v := <-res:
+			final = append(final, v)
+			if len(final) == n {
+				return final, nil
+			}
+		case <-ctx.Done():
+			return final, ctx.Err()
+		}
+	}
+}
+
+func (a *Agent) broadcastRpcPacket(ctx context.Context, pkt *PacketRpc) (n int, err error) {
+	a.peersMutex.RLock()
+	defer a.peersMutex.RUnlock()
+
+	if len(a.peers) == 0 {
+		return
+	}
+
+	for _, p := range a.peers {
+		if p.id == a.id {
+			// do not send to self
+			continue
+		}
+		n += 1
+		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
+		pkt2 := &PacketRpc{}
+		*pkt2 = *pkt
+		pkt2.TargetId = p.id
+		go p.Send(ctx, pkt2)
+	}
+
+	return
+}
+
 func (a *Agent) RPC(ctx context.Context, id string, endpoint string, data interface{}) (interface{}, error) {
 	p := a.GetPeer(id)
 	if p == nil {
@@ -387,6 +465,12 @@ func (a *Agent) RPC(ctx context.Context, id string, endpoint string, data interf
 	a.rpcL.Lock()
 	a.rpc[resId] = res
 	a.rpcL.Unlock()
+
+	defer func() {
+		a.rpcL.Lock()
+		delete(a.rpc, resId)
+		a.rpcL.Unlock()
+	}()
 
 	// send request
 	pkt := &PacketRpc{
@@ -402,10 +486,6 @@ func (a *Agent) RPC(ctx context.Context, id string, endpoint string, data interf
 	// get response
 	select {
 	case r := <-res:
-		a.rpcL.Lock()
-		delete(a.rpc, resId)
-		a.rpcL.Unlock()
-
 		if r == nil {
 			return nil, errors.New("failed to wait for response")
 		}
@@ -464,7 +544,7 @@ func (a *Agent) dialPeer(host, name string, id string) {
 
 	cfg := a.outCfg.Clone()
 	cfg.ServerName = id
-	cfg.NextProtos = []string{"fleet"}
+	cfg.NextProtos = []string{"fbin", "fleet"}
 
 	c, err := tls.Dial("tcp", host+":61337", cfg)
 	if err != nil {
