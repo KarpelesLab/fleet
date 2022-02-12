@@ -270,6 +270,18 @@ func (a *Agent) GetTlsConfig() (*tls.Config, error) {
 	return nil, errors.New("failed to load TLS certificates")
 }
 
+func (a *Agent) GetInternalTlsConfig() (*tls.Config, error) {
+	if cert, err := a.GetInternalCert(); err == nil {
+		cfg := new(tls.Config)
+		cfg.Certificates = []tls.Certificate{cert}
+		a.SeedTlsConfig(cfg)
+		a.ConfigureTlsServer(cfg)
+		return cfg, nil
+	}
+
+	return nil, errors.New("failed to load TLS certificates")
+}
+
 func (a *Agent) GetClientTlsConfig() (*tls.Config, error) {
 	if cert, err := a.GetInternalCert(); err == nil {
 		cfg := new(tls.Config)
