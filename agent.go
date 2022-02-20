@@ -753,6 +753,13 @@ func (a *Agent) GetPeerByName(name string) *Peer {
 	return nil
 }
 
+func (a *Agent) CountPeers() int {
+	a.peersMutex.RLock()
+	defer a.peersMutex.RUnlock()
+
+	return len(a.peers)
+}
+
 func (a *Agent) GetPeers() []*Peer {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
