@@ -777,6 +777,15 @@ func (a *Agent) handleAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 	return p.processAnnounce(ann, fromPeer)
 }
 
+func (a *Agent) SendPacketTo(ctx context.Context, target string, pc uint16, data []byte) error {
+	p := a.GetPeer(target)
+	if p == nil {
+		return ErrPeerNoRoute
+	}
+
+	return p.WritePacket(ctx, pc, data)
+}
+
 func (a *Agent) SendTo(ctx context.Context, target string, pkt interface{}) error {
 	p := a.GetPeer(target) // TODO find best route instead of using GetPeer
 	if p == nil {

@@ -206,7 +206,7 @@ func (p *Peer) handleBinary(pc uint16, data []byte) error {
 		log.Printf("[fleet] Closing peer connection because: %s", data)
 		return io.EOF
 	default:
-		if pc >= PacketCustom && pc <= MaxCustom {
+		if pc >= PacketCustom && pc <= PacketCustomMax {
 			// custom packet
 			return callCustomHandler(p, pc, data)
 		}
