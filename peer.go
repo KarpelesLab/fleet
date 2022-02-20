@@ -28,8 +28,6 @@ type Peer struct {
 	addr      *net.TCPAddr
 	valid     bool
 
-	sendQueue chan Packet
-
 	annIdx    uint64
 	numG      uint32
 	cnx       time.Time
@@ -37,7 +35,6 @@ type Peer struct {
 	aliveTime time.Time
 	timeOfft  time.Duration
 	Ping      time.Duration
-	binary    bool // if true, use new binary protocol
 
 	a *Agent
 
@@ -65,11 +62,8 @@ func (a *Agent) newConn(c net.Conn) {
 	}
 
 	switch tc.ConnectionState().NegotiatedProtocol {
-	case "fleet":
-		a.handleFleetConn(tc, false)
-		return
 	case "fbin":
-		a.handleFleetConn(tc, true)
+		a.handleFleetConn(tc)
 		return
 	case "p2p":
 		a.handleServiceConn(tc)
@@ -80,7 +74,7 @@ func (a *Agent) newConn(c net.Conn) {
 	}
 }
 
-func (a *Agent) handleFleetConn(tc *tls.Conn, isBin bool) {
+func (a *Agent) handleFleetConn(tc *tls.Conn) {
 	// instanciate peer and fetch certificate
 	p := &Peer{
 		c:         tc,
@@ -90,9 +84,7 @@ func (a *Agent) handleFleetConn(tc *tls.Conn, isBin bool) {
 		alive:     make(chan struct{}),
 		aliveTime: time.Now(),
 		annTime:   time.Now(),
-		sendQueue: make(chan Packet, 32),
 		valid:     true,
-		binary:    isBin,
 	}
 	err := p.fetchUuidFromCertificate()
 	if err != nil {
@@ -111,13 +103,8 @@ func (a *Agent) handleFleetConn(tc *tls.Conn, isBin bool) {
 	go p.sendHandshake(context.Background()) // will disappear
 	go p.register()
 
-	if isBin {
-		go p.loop()
-		go p.writeLoop()
-	} else {
-		go p.loopLegacy()
-		go p.writeLoopLegacy()
-	}
+	go p.loop()
+	go p.writeLoop()
 	go p.monitor()
 }
 
@@ -224,43 +211,6 @@ func (p *Peer) handleLegacy(data []byte) error {
 	return p.handlePacket(pkt)
 }
 
-func (p *Peer) loopLegacy() {
-	// read from peer
-	dec := gob.NewDecoder(p.c)
-	var pkt Packet
-	defer p.unregister()
-	defer p.c.Close()
-
-	for {
-		err := dec.Decode(&pkt)
-		if err != nil {
-			if err == io.EOF {
-				log.Printf("[fleet] disconnected peer %s (received EOF)", p.id)
-			} else {
-				log.Printf("[fleet] failed to read from peer %s: %s", p.id, err)
-			}
-
-			if p.valid {
-				go p.retryLater(10 * time.Second)
-			}
-
-			return
-		}
-
-		err = p.handlePacket(pkt)
-		if err != nil {
-			if err == io.EOF {
-				// closed connection
-				if p.valid {
-					go p.retryLater(10 * time.Second)
-				}
-				return
-			}
-			log.Printf("[fleet] failed handling packet from %s: %s", p.id, err)
-		}
-	}
-}
-
 func (p *Peer) monitor() {
 	defer p.unregister()
 	t := time.NewTicker(5 * time.Second)
@@ -297,7 +247,7 @@ func (p *Peer) handlePacket(pktI interface{}) error {
 	case *PacketRpc:
 		if pkt.TargetId != p.a.id {
 			// fw
-			return p.a.TrySendTo(pkt.TargetId, pkt)
+			return p.a.SendTo(context.Background(), pkt.TargetId, pkt)
 		}
 		// we don't really care about the source, just do the rpc thing
 		return p.a.handleRpc(pkt)
@@ -306,21 +256,21 @@ func (p *Peer) handlePacket(pktI interface{}) error {
 	case *PacketDbRecord:
 		if pkt.TargetId != p.a.id {
 			// fw
-			return p.a.TrySendTo(pkt.TargetId, pkt)
+			return p.a.SendTo(context.Background(), pkt.TargetId, pkt)
 		}
 		// let the db handle that
 		return p.a.feedDbSet(pkt.Bucket, pkt.Key, pkt.Val, pkt.Stamp)
 	case *PacketDbRequest:
 		if pkt.TargetId != p.a.id {
 			// fw
-			return p.a.TrySendTo(pkt.TargetId, pkt)
+			return p.a.SendTo(context.Background(), pkt.TargetId, pkt)
 		}
 		// grab from db
 		return p.handleDbRequest(pkt)
 	case *PacketDbVersions:
 		for _, v := range pkt.Info {
 			if p.a.needDbEntry(v.Bucket, v.Key, v.Stamp) {
-				if err := p.TrySend(&PacketDbRequest{TargetId: p.id, SourceId: p.a.id, Bucket: v.Bucket, Key: v.Key}); err != nil {
+				if err := p.Send(context.Background(), &PacketDbRequest{TargetId: p.id, SourceId: p.a.id, Bucket: v.Bucket, Key: v.Key}); err != nil {
 					return err
 				}
 			}
@@ -428,31 +378,10 @@ func (p *Peer) Agent() *Agent {
 
 func (p *Peer) Send(ctx context.Context, pkt Packet) error {
 	//log.Printf("[debug] sending packet %T to %s with context", pkt, p.id)
-
-	select {
-	case <-p.alive:
-		log.Printf("[fleet] sending packet to %s failed: connection closed", p.id)
-		return ErrConnectionClosed
-	case <-ctx.Done():
-		log.Printf("[fleet] sending packet to %s failed: queue full and timeout reached", p.id)
-		return ctx.Err()
-	case p.sendQueue <- pkt:
-		return nil
-	}
-}
-
-func (p *Peer) TrySend(pkt Packet) error {
-	//log.Printf("[debug] sending packet %T to %s", pkt, p.id)
-
-	select {
-	case <-p.alive:
-		log.Printf("[fleet] sending packet to %s failed: connection closed", p.id)
-		return ErrConnectionClosed
-	case p.sendQueue <- pkt:
-		return nil
-	default:
-		return ErrWriteQueueFull
-	}
+	buf := &bytes.Buffer{}
+	enc := gob.NewEncoder(buf)
+	enc.Encode(&pkt) // & is important
+	return p.WritePacket(ctx, PacketLegacy, buf.Bytes())
 }
 
 func (p *Peer) writeLoop() {
@@ -472,44 +401,11 @@ func (p *Peer) writeLoop() {
 				log.Printf("[fleet] Write to peer failed: %s", err)
 				return
 			}
-		case pkt := <-p.sendQueue:
-			// legacy packet
-			buf := &bytes.Buffer{}
-			enc := gob.NewEncoder(buf)
-			enc.Encode(&pkt) // & is important
-			err := p.WritePacket(context.Background(), PacketLegacy, buf.Bytes())
-			if err != nil {
-				log.Printf("[fleet] Write to peer failed: %s", err)
-				return
-			}
 		}
 	}
 }
 
-func (p *Peer) writeLoopLegacy() {
-	defer p.c.Close()
-	enc := gob.NewEncoder(p.c)
-
-	for {
-		select {
-		case <-p.alive:
-			// closed channel
-			return
-		case pkt := <-p.sendQueue:
-			err := enc.Encode(&pkt)
-			if err != nil {
-				log.Printf("[fleet] Write to peer failed: %s", err)
-				return
-			}
-		}
-	}
-}
-
-func (p *Peer) Writev(ctx context.Context, buf ...[]byte) (n int, err error) {
-	if !p.binary {
-		return 0, ErrInvalidLegacy
-	}
-
+func (p *Peer) writev(ctx context.Context, buf ...[]byte) (n int, err error) {
 	p.write.Lock()
 	defer p.write.Unlock()
 
@@ -517,7 +413,7 @@ func (p *Peer) Writev(ctx context.Context, buf ...[]byte) (n int, err error) {
 		p.c.SetWriteDeadline(deadline)
 	} else {
 		// reset deadline
-		p.c.SetWriteDeadline(time.Time{})
+		p.c.SetWriteDeadline(time.Now().Add(30 * time.Second))
 	}
 
 	for _, b := range buf {
@@ -527,6 +423,7 @@ func (p *Peer) Writev(ctx context.Context, buf ...[]byte) (n int, err error) {
 		}
 		if serr != nil {
 			err = serr
+			p.c.Close()
 			return
 		}
 	}
@@ -542,7 +439,7 @@ func (p *Peer) WritePacket(ctx context.Context, pc uint16, data []byte) error {
 		byte(ln >> 8),
 		byte(ln),
 	}
-	_, err := p.Writev(ctx, pcBin, lnBin, data)
+	_, err := p.writev(ctx, pcBin, lnBin, data)
 	return err
 }
 

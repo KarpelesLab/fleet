@@ -157,7 +157,7 @@ func (a *Agent) doInit(token *jwt.Token) (err error) {
 	a.inCfg.RootCAs = a.ca
 	a.outCfg.RootCAs = a.ca
 
-	a.inCfg.NextProtos = []string{"fbin", "fleet", "p2p"}
+	a.inCfg.NextProtos = []string{"fbin", "p2p"}
 
 	// configure client auth
 	a.inCfg.ClientAuth = tls.RequireAndVerifyClientCert
@@ -590,7 +590,7 @@ func (a *Agent) dialPeer(host, name string, id string) {
 
 	cfg := a.outCfg.Clone()
 	cfg.ServerName = id
-	cfg.NextProtos = []string{"fbin", "fleet"}
+	cfg.NextProtos = []string{"fbin"}
 
 	c, err := tls.Dial("tcp", host+":61337", cfg)
 	if err != nil {
@@ -703,9 +703,6 @@ func (a *Agent) DumpInfo(w io.Writer) {
 
 	for _, p := range t {
 		fmt.Fprintf(w, "Peer:     %s (%s)\n", p.name, p.id)
-		if !p.binary {
-			fmt.Fprintf(w, "Protocol: LEGACY!\n")
-		}
 		fmt.Fprintf(w, "Division: %s\n", p.division)
 		fmt.Fprintf(w, "Endpoint: %s\n", p.c.RemoteAddr())
 		fmt.Fprintf(w, "Connected:%s (%s ago)\n", p.cnx, time.Since(p.cnx))
@@ -796,13 +793,4 @@ func (a *Agent) SendTo(ctx context.Context, target string, pkt interface{}) erro
 	}
 
 	return p.Send(ctx, pkt)
-}
-
-func (a *Agent) TrySendTo(target string, pkt interface{}) error {
-	p := a.GetPeer(target) // TODO find best route instead of using GetPeer
-	if p == nil {
-		return ErrPeerNoRoute
-	}
-
-	return p.TrySend(pkt)
 }
