@@ -35,6 +35,7 @@ type Agent struct {
 	division string
 	hostname string // only the hostname side
 	IP       string // ip as seen from outside
+	cache    string // location of cache
 
 	inCfg  *tls.Config
 	outCfg *tls.Config

@@ -24,8 +24,13 @@ func (a *Agent) initPath() {
 			return
 		}
 		log.Printf("[fleet] set cache dir: %s", c)
+		a.cache = c
 		os.Chdir(c)
 	}
+}
+
+func (a *Agent) CacheDir() string {
+	return a.cache
 }
 
 func EnsureDir(c string) error {
