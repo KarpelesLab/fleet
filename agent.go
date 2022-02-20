@@ -638,8 +638,6 @@ func (a *Agent) doAnnounce() {
 		return
 	}
 
-	log.Printf("[agent] sending announce to %d peers", len(peers))
-
 	x := atomic.AddUint64(&a.announceIdx, 1)
 
 	pkt := &PacketAnnounce{
@@ -772,6 +770,7 @@ func (a *Agent) handleAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 	if p == nil {
 		// need to establish link
 		//go a.dialPeer(ann.Ip, "", ann.Id)
+		log.Printf("[agent] failed to process announce from %s (no such peer)", ann.Id)
 		return nil
 	}
 

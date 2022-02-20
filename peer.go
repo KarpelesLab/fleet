@@ -230,7 +230,7 @@ func (p *Peer) monitor() {
 	}
 }
 
-func (p *Peer) handlePacket(pktI interface{}) error {
+func (p *Peer) handlePacket(pktI Packet) error {
 	switch pkt := pktI.(type) {
 	case *PacketHandshake:
 		if pkt.Id != p.id {
