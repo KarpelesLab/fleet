@@ -244,7 +244,6 @@ func (p *Peer) handlePacket(pktI Packet) error {
 	case *PacketSeed:
 		return p.a.handleNewSeed(pkt.Seed, pkt.Time)
 	case *PacketAnnounce:
-		log.Printf("[agent] DEBUG Got announce %+v", pkt)
 		return p.a.handleAnnounce(pkt, p)
 	case *PacketRpc:
 		if pkt.TargetId != p.a.id {
