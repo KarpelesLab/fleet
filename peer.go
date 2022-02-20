@@ -406,18 +406,23 @@ func (p *Peer) fetchUuidFromCertificate() error {
 	return nil
 }
 
+// Id returns the peer's internal ID, which is unique and can be used to send
+// packets to this peer specifically in the future.
 func (p *Peer) Id() string {
 	return p.id
 }
 
+// Name returns this peer's name
 func (p *Peer) Name() string {
 	return p.name
 }
 
+// Division returns this peer's division string
 func (p *Peer) Division() string {
 	return p.division
 }
 
+// Agent returns the Agent object associated with this peer
 func (p *Peer) Agent() *Agent {
 	return p.a
 }
