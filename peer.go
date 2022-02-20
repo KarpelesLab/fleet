@@ -418,6 +418,10 @@ func (p *Peer) Division() string {
 	return p.division
 }
 
+func (p *Peer) Agent() *Agent {
+	return p.a
+}
+
 func (p *Peer) Send(ctx context.Context, pkt Packet) error {
 	//log.Printf("[debug] sending packet %T to %s with context", pkt, p.id)
 
