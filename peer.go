@@ -601,6 +601,7 @@ func (p *Peer) sendHandshake(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	p.WritePacket(ctx, PacketPing, DbStamp(time.Now()).Bytes())
 	p.Send(ctx, p.a.databasePacket())
 	return p.Send(ctx, p.a.seedPacket())
 }
