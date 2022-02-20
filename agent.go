@@ -638,6 +638,8 @@ func (a *Agent) doAnnounce() {
 		return
 	}
 
+	log.Printf("[agent] sending announce to %d peers", len(peers))
+
 	x := atomic.AddUint64(&a.announceIdx, 1)
 
 	pkt := &PacketAnnounce{
