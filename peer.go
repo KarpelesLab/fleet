@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -410,6 +411,10 @@ func (p *Peer) writev(ctx context.Context, buf ...[]byte) (n int, err error) {
 	defer p.write.Unlock()
 
 	if deadline, ok := ctx.Deadline(); ok {
+		if time.Until(deadline) < 0 {
+			// write error but non closing
+			return 0, os.ErrDeadlineExceeded
+		}
 		p.c.SetWriteDeadline(deadline)
 	} else {
 		// reset deadline
