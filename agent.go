@@ -703,6 +703,9 @@ func (a *Agent) DumpInfo(w io.Writer) {
 
 	for _, p := range t {
 		fmt.Fprintf(w, "Peer:     %s (%s)\n", p.name, p.id)
+		if !p.binary {
+			fmt.Fprintf(w, "Protocol: LEGACY!\n")
+		}
 		fmt.Fprintf(w, "Division: %s\n", p.division)
 		fmt.Fprintf(w, "Endpoint: %s\n", p.c.RemoteAddr())
 		fmt.Fprintf(w, "Connected:%s (%s ago)\n", p.cnx, time.Since(p.cnx))
