@@ -8,7 +8,7 @@ import (
 type CustomHandler func(p *Peer, data []byte) error
 
 var (
-	customHandlers   map[uint16]CustomHandler
+	customHandlers   = make(map[uint16]CustomHandler)
 	customHandlersLk sync.RWMutex
 )
 
