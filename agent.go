@@ -656,13 +656,13 @@ func (a *Agent) doAnnounce() {
 	for _, p := range peers {
 		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
 		wg.Add(1)
-		go func() {
+		go func(p *Peer) {
 			defer wg.Done()
 			err := p.Send(ctx, pkt)
 			if err != nil {
 				log.Printf("[agent] failed to send announce to %s: %s", p.id, err)
 			}
-		}()
+		}(p)
 	}
 	wg.Wait()
 }
