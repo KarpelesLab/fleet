@@ -199,14 +199,13 @@ func (a *Agent) BroadcastRpc(ctx context.Context, endpoint string, data interfac
 		Data:     data,
 	}
 
-	a.peersMutex.RLock()
-	defer a.peersMutex.RUnlock()
+	peers := a.GetPeers()
 
-	if len(a.peers) == 0 {
+	if len(peers) == 0 {
 		return nil
 	}
 
-	for _, p := range a.peers {
+	for _, p := range peers {
 		if p.id == a.id {
 			// do not send to self
 			continue
@@ -669,14 +668,13 @@ func (a *Agent) doAnnounce() {
 }
 
 func (a *Agent) doBroadcast(ctx context.Context, pkt Packet, except_id string) {
-	a.peersMutex.RLock()
-	defer a.peersMutex.RUnlock()
+	peers := a.GetPeers()
 
-	if len(a.peers) == 0 {
+	if len(peers) == 0 {
 		return
 	}
 
-	for _, p := range a.peers {
+	for _, p := range peers {
 		if p.id == except_id {
 			continue
 		}
