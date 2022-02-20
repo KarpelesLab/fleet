@@ -506,6 +506,10 @@ func (p *Peer) writeLoopLegacy() {
 }
 
 func (p *Peer) Writev(ctx context.Context, buf ...[]byte) (n int, err error) {
+	if !p.binary {
+		return 0, ErrInvalidLegacy
+	}
+
 	p.write.Lock()
 	defer p.write.Unlock()
 
