@@ -221,6 +221,26 @@ func (a *Agent) BroadcastRpc(ctx context.Context, endpoint string, data interfac
 	return nil
 }
 
+func (a *Agent) BroadcastPacket(ctx context.Context, pc uint16, data []byte) error {
+	peers := a.GetPeers()
+	if len(peers) == 0 {
+		return nil // nothing to do
+	}
+
+	var wg sync.WaitGroup
+
+	for _, p := range peers {
+		wg.Add(1)
+		go func(p *Peer) {
+			defer wg.Done()
+			p.WritePacket(ctx, pc, data)
+		}(p)
+	}
+
+	wg.Wait()
+	return nil
+}
+
 func (a *Agent) broadcastDbRecord(ctx context.Context, bucket, key, val []byte, v DbStamp) error {
 	pkt := &PacketDbRecord{
 		SourceId: a.id,

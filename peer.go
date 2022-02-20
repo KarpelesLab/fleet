@@ -185,7 +185,7 @@ func (p *Peer) handleBinary(pc uint16, data []byte) error {
 	case PacketLegacy:
 		return p.handleLegacy(data)
 	case PacketPing:
-		return p.WritePacket(PacketPong, data)
+		return p.WritePacket(context.Background(), PacketPong, data)
 	case PacketPong:
 		var t DbStamp
 		err := t.UnmarshalBinary(data)
@@ -458,17 +458,19 @@ func (p *Peer) writeLoop() {
 			return
 		case now := <-t.C:
 			// send new alive packet
-			err := p.WritePacket(PacketPing, DbStamp(now).Bytes())
+			v := DbStamp(now).Bytes()
+			err := p.WritePacket(context.Background(), PacketPing, v)
 			if err != nil {
 				log.Printf("[fleet] Write to peer failed: %s", err)
 				return
 			}
+			p.WritePacket(context.Background(), PacketAlive, v)
 		case pkt := <-p.sendQueue:
 			// legacy packet
 			buf := &bytes.Buffer{}
 			enc := gob.NewEncoder(buf)
 			enc.Encode(&pkt) // & is important
-			err := p.WritePacket(PacketLegacy, buf.Bytes())
+			err := p.WritePacket(context.Background(), PacketLegacy, buf.Bytes())
 			if err != nil {
 				log.Printf("[fleet] Write to peer failed: %s", err)
 				return
@@ -479,7 +481,6 @@ func (p *Peer) writeLoop() {
 
 func (p *Peer) writeLoopLegacy() {
 	defer p.c.Close()
-	t := time.NewTicker(5 * time.Second)
 	enc := gob.NewEncoder(p.c)
 
 	for {
@@ -487,8 +488,6 @@ func (p *Peer) writeLoopLegacy() {
 		case <-p.alive:
 			// closed channel
 			return
-		case now := <-t.C:
-			p.WritePacket(PacketAlive, DbStamp(now).Bytes())
 		case pkt := <-p.sendQueue:
 			err := enc.Encode(&pkt)
 			if err != nil {
@@ -499,9 +498,16 @@ func (p *Peer) writeLoopLegacy() {
 	}
 }
 
-func (p *Peer) Writev(buf ...[]byte) (n int, err error) {
+func (p *Peer) Writev(ctx context.Context, buf ...[]byte) (n int, err error) {
 	p.write.Lock()
 	defer p.write.Unlock()
+
+	if deadline, ok := ctx.Deadline(); ok {
+		p.c.SetWriteDeadline(deadline)
+	} else {
+		// reset deadline
+		p.c.SetWriteDeadline(time.Time{})
+	}
 
 	for _, b := range buf {
 		sn, serr := p.c.Write(b)
@@ -516,7 +522,7 @@ func (p *Peer) Writev(buf ...[]byte) (n int, err error) {
 	return
 }
 
-func (p *Peer) WritePacket(pc uint16, data []byte) error {
+func (p *Peer) WritePacket(ctx context.Context, pc uint16, data []byte) error {
 	pcBin := []byte{byte(pc >> 8), byte(pc)}
 	ln := len(data)
 	lnBin := []byte{
@@ -525,14 +531,16 @@ func (p *Peer) WritePacket(pc uint16, data []byte) error {
 		byte(ln >> 8),
 		byte(ln),
 	}
-	_, err := p.Writev(pcBin, lnBin, data)
+	_, err := p.Writev(ctx, pcBin, lnBin, data)
 	return err
 }
 
 func (p *Peer) Close(reason string) error {
 	log.Printf("[fleet] Closing connection to %s: %s", p.id, reason)
 	p.c.SetWriteDeadline(time.Now().Add(1 * time.Second))
-	err := p.WritePacket(PacketClose, []byte(reason))
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	err := p.WritePacket(ctx, PacketClose, []byte(reason))
 	if err != nil {
 		return err
 	}
