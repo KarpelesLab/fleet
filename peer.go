@@ -244,6 +244,7 @@ func (p *Peer) handlePacket(pktI Packet) error {
 	case *PacketSeed:
 		return p.a.handleNewSeed(pkt.Seed, pkt.Time)
 	case *PacketAnnounce:
+		log.Printf("[agent] DEBUG Got announce %+v", pkt)
 		return p.a.handleAnnounce(pkt, p)
 	case *PacketRpc:
 		if pkt.TargetId != p.a.id {
@@ -288,6 +289,7 @@ func (p *Peer) processAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 
 	if ann.Idx <= p.annIdx {
 		// already seen this announce, ignore it
+		log.Printf("[agent] got announce %d but already seen %d", ann.Idx, p.annIdx)
 		return nil
 	}
 

@@ -648,6 +648,8 @@ func (a *Agent) doAnnounce() {
 		NumG: uint32(runtime.NumGoroutine()),
 	}
 
+	log.Printf("[agent] broadcasting announce %+v", pkt)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	var wg sync.WaitGroup
