@@ -650,7 +650,7 @@ func (a *Agent) doAnnounce() {
 
 	log.Printf("[agent] broadcasting announce %+v", pkt)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	var wg sync.WaitGroup
 
@@ -659,7 +659,10 @@ func (a *Agent) doAnnounce() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			p.Send(ctx, pkt)
+			err := p.Send(ctx, pkt)
+			if err != nil {
+				log.Printf("[agent] failed to send announce to %s: %s", p.id, err)
+			}
 		}()
 	}
 	wg.Wait()
