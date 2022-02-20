@@ -430,7 +430,9 @@ func (p *Peer) writev(ctx context.Context, buf ...[]byte) (n int, err error) {
 		}
 		if serr != nil {
 			err = serr
-			p.c.Close()
+			if n > 0 {
+				p.c.Close() // close because that is a partial write
+			}
 			return
 		}
 	}

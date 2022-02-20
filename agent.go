@@ -647,7 +647,7 @@ func (a *Agent) doAnnounce() {
 		NumG: uint32(runtime.NumGoroutine()),
 	}
 
-	log.Printf("[agent] broadcasting announce %+v", pkt)
+	log.Printf("[agent] broadcasting announce %+v to %d peers", pkt, len(peers))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
