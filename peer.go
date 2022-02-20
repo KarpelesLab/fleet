@@ -131,20 +131,31 @@ func (p *Peer) loop() {
 	defer p.c.Close()
 
 	// read from peer
-	for {
-		var pc uint16 // packet code
-		var ln uint32 // packet len
-		var buf []byte
+	header := make([]byte, 6)
+	var pc uint16  // packet code
+	var ln uint32  // packet len
+	var buf []byte // buffer (kept if large enough)
 
-		err := binary.Read(p.c, binary.BigEndian, &pc)
+	for {
+		_, err := io.ReadFull(p.c, header)
 		if err == nil {
-			err = binary.Read(p.c, binary.BigEndian, &ln)
-		}
-		if err == nil {
+			pc = binary.BigEndian.Uint16(header[:2])
+			ln = binary.BigEndian.Uint32(header[2:])
+
 			if ln > PacketMaxLen {
 				// too large
 				err = fmt.Errorf("rejected packet too large (%d bytes)", ln)
+			} else if ln == 0 {
+				if buf != nil {
+					// set buf length to 0 but do not drop buf
+					buf = buf[:0]
+				}
+			} else if int(ln) <= cap(buf) {
+				// can store this in the current buffer
+				buf = buf[:ln]
+				_, err = io.ReadFull(p.c, buf)
 			} else {
+				// allocate new buffer
 				buf = make([]byte, ln)
 				_, err = io.ReadFull(p.c, buf)
 			}
@@ -194,6 +205,11 @@ func (p *Peer) handleBinary(pc uint16, data []byte) error {
 	case PacketClose:
 		log.Printf("[fleet] Closing peer connection because: %s", data)
 		return io.EOF
+	default:
+		if pc >= PacketCustom && pc <= MaxCustom {
+			// custom packet
+			return callCustomHandler(p, pc, data)
+		}
 	}
 	return nil
 }
@@ -388,6 +404,18 @@ func (p *Peer) fetchUuidFromCertificate() error {
 
 	p.id = peer_id
 	return nil
+}
+
+func (p *Peer) Id() string {
+	return p.id
+}
+
+func (p *Peer) Name() string {
+	return p.name
+}
+
+func (p *Peer) Division() string {
+	return p.division
 }
 
 func (p *Peer) Send(ctx context.Context, pkt Packet) error {
