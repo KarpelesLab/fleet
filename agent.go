@@ -157,7 +157,7 @@ func (a *Agent) doInit(token *jwt.Token) (err error) {
 	a.inCfg.RootCAs = a.ca
 	a.outCfg.RootCAs = a.ca
 
-	a.inCfg.NextProtos = []string{"fleet", "fbin", "p2p"}
+	a.inCfg.NextProtos = []string{"fbin", "fleet", "p2p"}
 
 	// configure client auth
 	a.inCfg.ClientAuth = tls.RequireAndVerifyClientCert
