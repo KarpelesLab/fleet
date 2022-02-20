@@ -185,6 +185,13 @@ func (p *Peer) handleBinary(pc uint16, data []byte) error {
 	case PacketLegacy:
 		return p.handleLegacy(data)
 	case PacketPing:
+		p.aliveTime = time.Now()
+		var t DbStamp
+		err := t.UnmarshalBinary(data)
+		if err != nil {
+			return err
+		}
+		p.timeOfft = p.aliveTime.Sub(time.Time(t))
 		return p.WritePacket(context.Background(), PacketPong, data)
 	case PacketPong:
 		var t DbStamp
@@ -194,14 +201,6 @@ func (p *Peer) handleBinary(pc uint16, data []byte) error {
 		}
 		p.Ping = time.Since(time.Time(t))
 		return nil
-	case PacketAlive:
-		var t DbStamp
-		err := t.UnmarshalBinary(data)
-		if err != nil {
-			return err
-		}
-		p.aliveTime = time.Now()
-		p.timeOfft = p.aliveTime.Sub(time.Time(t))
 	case PacketClose:
 		log.Printf("[fleet] Closing peer connection because: %s", data)
 		return io.EOF
@@ -473,7 +472,6 @@ func (p *Peer) writeLoop() {
 				log.Printf("[fleet] Write to peer failed: %s", err)
 				return
 			}
-			p.WritePacket(context.Background(), PacketAlive, v)
 		case pkt := <-p.sendQueue:
 			// legacy packet
 			buf := &bytes.Buffer{}

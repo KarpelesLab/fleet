@@ -5,7 +5,6 @@ const (
 
 	PacketLegacy = 0xffff // legacy gob-encoded packet
 	PacketPing   = 0x1001
-	PacketAlive  = 0x1002
 	PacketPong   = 0x3001
 	PacketClose  = 0x1fff
 
