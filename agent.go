@@ -632,10 +632,9 @@ func (a *Agent) eventLoop() {
 }
 
 func (a *Agent) doAnnounce() {
-	a.peersMutex.RLock()
-	defer a.peersMutex.RUnlock()
+	peers := a.GetPeers()
 
-	if len(a.peers) == 0 {
+	if len(peers) == 0 {
 		return
 	}
 
@@ -653,7 +652,7 @@ func (a *Agent) doAnnounce() {
 	defer cancel()
 	var wg sync.WaitGroup
 
-	for _, p := range a.peers {
+	for _, p := range peers {
 		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
 		wg.Add(1)
 		go func() {
