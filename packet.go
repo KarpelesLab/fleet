@@ -36,6 +36,7 @@ type PacketAnnounce struct {
 	Idx  uint64
 	NumG uint32 // number of goroutines
 	AZ   string
+	Meta map[string]interface{}
 }
 
 type PacketSeed struct {

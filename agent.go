@@ -62,6 +62,10 @@ type Agent struct {
 	dbWatch     map[string]DbWatchCallback
 	dbWatchLock sync.RWMutex
 
+	// Meta-info
+	meta   map[string]interface{}
+	metaLk sync.RWMutex
+
 	// getfile callback
 	GetFile GetFileFunc
 
@@ -646,6 +650,7 @@ func (a *Agent) doAnnounce() {
 		Idx:  x,
 		AZ:   a.division,
 		NumG: uint32(runtime.NumGoroutine()),
+		Meta: a.copyMeta(),
 	}
 
 	//log.Printf("[agent] broadcasting announce %+v to %d peers", pkt, len(peers))
@@ -804,4 +809,32 @@ func (a *Agent) SendTo(ctx context.Context, target string, pkt interface{}) erro
 	}
 
 	return p.Send(ctx, pkt)
+}
+
+func (a *Agent) MetaSet(key string, value interface{}) {
+	a.metaLk.Lock()
+	defer a.metaLk.Unlock()
+
+	if a.meta == nil {
+		a.meta = make(map[string]interface{})
+	}
+
+	a.meta[key] = value
+}
+
+func (a *Agent) copyMeta() map[string]interface{} {
+	a.metaLk.RLock()
+	defer a.metaLk.RUnlock()
+
+	if a.meta == nil {
+		return nil
+	}
+
+	res := make(map[string]interface{})
+
+	for k, v := range a.meta {
+		res[k] = v
+	}
+
+	return res
 }

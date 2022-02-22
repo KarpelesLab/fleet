@@ -44,6 +44,9 @@ type Peer struct {
 	write sync.Mutex
 
 	alive chan struct{}
+
+	meta   map[string]interface{}
+	metaLk sync.Mutex
 }
 
 func (a *Agent) newConn(c net.Conn) {
@@ -295,6 +298,7 @@ func (p *Peer) processAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 	p.annIdx = ann.Idx
 	p.annTime = ann.Now
 	atomic.StoreUint32(&p.numG, ann.NumG)
+	p.setMeta(ann.Meta)
 
 	// send response
 	//p.a.TrySendTo(ann.Id, &PacketPong{TargetId: ann.Id, SourceId: p.a.id, Now: ann.Now})
@@ -509,4 +513,18 @@ func (p *Peer) sendHandshake(ctx context.Context) error {
 	p.WritePacket(ctx, PacketPing, DbStamp(time.Now()).Bytes())
 	p.Send(ctx, p.a.databasePacket())
 	return p.Send(ctx, p.a.seedPacket())
+}
+
+func (p *Peer) Meta() map[string]interface{} {
+	p.metaLk.Lock()
+	defer p.metaLk.Unlock()
+
+	return p.meta
+}
+
+func (p *Peer) setMeta(v map[string]interface{}) {
+	p.metaLk.Lock()
+	defer p.metaLk.Unlock()
+
+	p.meta = v
 }
