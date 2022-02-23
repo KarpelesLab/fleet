@@ -1,7 +1,7 @@
 package fleet
 
 const (
-	PacketMaxLen = 1024 * 1024 // 1MB
+	PacketMaxLen = 32 * 1024 * 1024 // 32MB
 
 	PacketLegacy = 0xffff // legacy gob-encoded packet
 	PacketPing   = 0x1001
