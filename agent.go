@@ -71,6 +71,10 @@ type Agent struct {
 
 	// seed: use a pointer for atomic seed details update
 	seed *seedData
+
+	// locking
+	globalLocks   map[string]*globalLock
+	globalLocksLk sync.RWMutex
 }
 
 // New will just initialize a basic agent without any settings
@@ -95,12 +99,13 @@ func spawn() *Agent {
 	}
 
 	a := &Agent{
-		id:       local,
-		name:     local,
-		peers:    make(map[string]*Peer),
-		services: make(map[string]chan net.Conn),
-		rpc:      make(map[uintptr]chan *PacketRpcResponse),
-		dbWatch:  make(map[string]DbWatchCallback),
+		id:          local,
+		name:        local,
+		peers:       make(map[string]*Peer),
+		services:    make(map[string]chan net.Conn),
+		rpc:         make(map[uintptr]chan *PacketRpcResponse),
+		dbWatch:     make(map[string]DbWatchCallback),
+		globalLocks: make(map[string]*globalLock),
 	}
 	runtime.SetFinalizer(a, closeAgentect)
 	return a
