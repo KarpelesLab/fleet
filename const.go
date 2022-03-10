@@ -3,10 +3,13 @@ package fleet
 const (
 	PacketMaxLen = 32 * 1024 * 1024 // 32MB
 
-	PacketLegacy = 0xffff // legacy gob-encoded packet
-	PacketPing   = 0x1001
-	PacketPong   = 0x3001
-	PacketClose  = 0x1fff
+	PacketLegacy  = 0xffff // legacy gob-encoded packet
+	PacketPing    = 0x1001
+	PacketPong    = 0x3001
+	PacketLockReq = 0x1002 // request for lock
+	PacketLockRes = 0x3002 // response (aye or nay)
+	PacketLockUpd = 0x1003 // update lock status (confirm, release, etc)
+	PacketClose   = 0x1fff
 
 	PacketCustom    = 0xa000 // 0xa000 ~ 0xafff are custom channels
 	PacketCustomMax = 0xafff

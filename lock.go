@@ -2,29 +2,29 @@ package fleet
 
 import (
 	"context"
-	"errors"
+	"encoding/binary"
+	"runtime"
 	"sync"
 	"time"
 )
 
 type LocalLock struct {
-	name    string
-	t       uint64
-	aye     []string     // peers ids approving lock
-	nay     []string     // peers ids rejecting lock
-	lk      sync.RWMutex // for aye/nay updates
-	cd      *sync.Cond   // used when acquiring loco
-	release sync.Once    // used to ensure release is called only once
-	timeout time.Time
+	lk   *globalLock
+	once sync.Once
 }
 
 type globalLock struct {
-	name   string
-	t      uint64
-	owner  string        // owner node
-	ch     chan struct{} // wait channel for lock release
-	status int           // 0=new 1=confirmed
-	a      *Agent
+	name    string
+	t       uint64
+	owner   string      // owner node
+	ch      chan uint32 // wait channel for lock release or updates
+	status  uint32      // 0=new 1=confirmed 2=failed
+	local   bool
+	lk      sync.Mutex // for aye/nay updates
+	aye     []string   // peers ids approving lock (if local)
+	nay     []string   // peers ids rejecting lock (if local)
+	a       *Agent
+	timeout time.Time
 }
 
 func (a *Agent) getLock(name string) *globalLock {
@@ -49,9 +49,10 @@ func (a *Agent) makeLock(name, owner string, tm uint64) *globalLock {
 		name:  name,
 		owner: owner,
 		t:     tm,
-		ch:    make(chan struct{}),
+		ch:    make(chan uint32),
 		a:     a,
 	}
+	lk.lk.Lock()
 	a.globalLocks[name] = lk
 	return lk
 }
@@ -69,10 +70,57 @@ func (l *globalLock) release() {
 	close(l.ch)
 }
 
+// generate a []byte of a lock name's stamp and owner
+func codeLockBytes(name string, t uint64, owner string) []byte {
+	v := make([]byte, 8+2+len(name)+len(owner))
+	s := v
+	s[0] = byte(len(name))
+	copy(s[1:], name)
+	s = s[len(name)+1:]
+	binary.BigEndian.PutUint64(s[:8], t)
+	s = s[8:]
+	s[0] = byte(len(owner))
+	copy(s[1:], owner)
+
+	return v
+}
+
+// reads a []byte containing info and returns data
+func decodeLockBytes(v []byte) (string, uint64, string, []byte) {
+	// return: name, stamp, owner, and remaining of v
+
+	// check if v is long enough
+	if len(v) < 10 {
+		return "", 0, "", nil
+	}
+	nameLen := v[0]
+	if len(v) < int(nameLen)+1+8+1 { // nameLen, stamp, ownerLen
+		return "", 0, "", nil
+	}
+	name := v[1 : int(nameLen)+1]
+	v = v[int(nameLen)+1:]
+
+	t := binary.BigEndian.Uint64(v[:8])
+	v = v[8:]
+
+	ownerLen := v[0]
+	if len(v) < int(ownerLen)+1 {
+		return "", 0, "", nil
+	}
+	owner := v[1 : ownerLen+1]
+	v = v[ownerLen+1:]
+
+	return string(name), t, string(owner), v
+}
+
 func (a *Agent) Lock(ctx context.Context, name string) (*LocalLock, error) {
 	// Lock function attempts to grab a lock and get it confirmed globally
 	// if >= (1/2+1) of nodes respond aye, the lock is confirmed and this function returns
 	// if >= (1/3+1) of nodes respond nay, lock acquire fails and is retried unless ctx timeouts
+
+	if name == "" {
+		return nil, ErrInvalidLockName
+	}
 
 	// first, let's check if this isn't already locked, if it is, wait
 	for {
@@ -105,12 +153,57 @@ func (a *Agent) Lock(ctx context.Context, name string) (*LocalLock, error) {
 			continue
 		}
 
-		newlk := &LocalLock{
-			name: name,
-			t:    tm,
+		lk.local = true
+		lk.lk.Unlock()
+
+		// attempt acquire
+		timeout := time.NewTimer(5 * time.Second)
+
+	acqLoop:
+		for {
+			select {
+			case st, ok := <-lk.ch:
+				if !ok {
+					// lock was cancelled externally
+					timeout.Stop()
+					return nil, ErrCancelledLock
+				}
+				if st == 0 {
+					// nothing new
+					break
+				}
+				if st == 1 {
+					// ready
+					res := &LocalLock{lk: lk}
+					runtime.SetFinalizer(res, finalizeLocalLock)
+					timeout.Stop()
+					return res, nil
+				}
+				if st == 2 {
+					// reached too many nay
+					lk.release()
+					break acqLoop
+				}
+			case <-timeout.C:
+				// reached timeout
+				lk.release()
+				break acqLoop
+			case <-ctx.Done():
+				lk.release()
+				timeout.Stop()
+				return nil, ctx.Err()
+			}
 		}
-		newlk.cd = sync.NewCond(newlk.lk.RLocker())
-		// returned locallock object will have a finalizer setup, but calling release manually is preferred
-		return nil, errors.New("TODO")
 	}
+}
+
+func finalizeLocalLock(lk *LocalLock) {
+	lk.Release()
+}
+
+func (lk *LocalLock) Release() {
+	// perform release
+	lk.once.Do(func() {
+		lk.lk.release()
+	})
 }
