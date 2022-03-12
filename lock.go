@@ -27,37 +27,48 @@ type globalLock struct {
 	timeout time.Time
 }
 
+// load a lock from the db
 func (a *Agent) getLock(name string) *globalLock {
 	a.globalLocksLk.RLock()
 	defer a.globalLocksLk.RUnlock()
 	v, ok := a.globalLocks[name]
-	if ok {
+	if ok && v.valid() {
 		return v
 	}
 	return nil
 }
 
+// create a new lock
 func (a *Agent) makeLock(name, owner string, tm uint64) *globalLock {
 	a.globalLocksLk.Lock()
 	defer a.globalLocksLk.Unlock()
 
-	if _, ok := a.globalLocks[name]; ok {
+	if v, ok := a.globalLocks[name]; ok && v.valid() {
 		return nil
 	}
 
+	// note: no need to release expired locks
+
 	lk := &globalLock{
-		name:  name,
-		owner: owner,
-		t:     tm,
-		ch:    make(chan uint32),
-		a:     a,
+		name:    name,
+		owner:   owner,
+		t:       tm,
+		ch:      make(chan uint32),
+		a:       a,
+		timeout: time.Now().Add(30 * time.Minute),
 	}
+	// lock it now
 	lk.lk.Lock()
 	a.globalLocks[name] = lk
 	return lk
 }
 
 func (l *globalLock) release() {
+	if l.local {
+		// broadcast release
+		go l.a.BroadcastPacket(context.Background(), PacketLockRelease, l.Key())
+	}
+
 	l.a.globalLocksLk.Lock()
 	defer l.a.globalLocksLk.Unlock()
 
@@ -68,6 +79,10 @@ func (l *globalLock) release() {
 	}
 	delete(l.a.globalLocks, l.name)
 	close(l.ch)
+}
+
+func (l *globalLock) Key() []byte {
+	return codeLockBytes(l.name, l.t, l.owner)
 }
 
 // generate a []byte of a lock name's stamp and owner
@@ -206,4 +221,11 @@ func (lk *LocalLock) Release() {
 	lk.once.Do(func() {
 		lk.lk.release()
 	})
+}
+
+func (lk *globalLock) valid() bool {
+	if time.Until(lk.timeout) < 0 {
+		return false
+	}
+	return true
 }
