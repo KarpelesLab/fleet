@@ -189,6 +189,7 @@ func (a *Agent) Lock(ctx context.Context, name string) (*LocalLock, error) {
 
 		// attempt acquire
 		timeout := time.NewTimer(5 * time.Second)
+		go a.BroadcastPacket(context.Background(), PacketLockReq, lk.Key())
 
 	acqLoop:
 		for {
