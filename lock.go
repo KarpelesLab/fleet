@@ -421,7 +421,7 @@ func (a *Agent) handleLockConfirm(p *Peer, data []byte) error {
 	// make lock
 	g = a.makeLock(lk, o, t, true)
 	g.timeout = time.Now().Add(30 * time.Minute)
-	g.status = 1
+	g.setStatus(1)
 	g.lk.Unlock()
 	return nil
 }
@@ -449,10 +449,17 @@ func (lk *globalLock) getStatus() uint32 {
 }
 
 func (lk *globalLock) setStatus(v uint32) {
-	if lk.getStatus() == v {
-		return
+	log.Printf("[fleet] lock %s set status = %d (from %d)", lk.name, v, lk.getStatus())
+	for {
+		oldv := lk.getStatus()
+		if oldv >= v {
+			// cannot go down
+			return
+		}
+		if atomic.CompareAndSwapUint32(&lk.status, oldv, v) {
+			break
+		}
 	}
-	atomic.StoreUint32(&lk.status, v)
 	select {
 	case lk.ch <- v:
 	default:
