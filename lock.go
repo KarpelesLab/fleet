@@ -248,6 +248,9 @@ func (lk *LocalLock) Release() {
 }
 
 func (lk *globalLock) valid() bool {
+	if lk.status == 2 {
+		return false
+	}
 	if time.Until(lk.timeout) < 0 {
 		return false
 	}
@@ -266,6 +269,7 @@ func (a *Agent) handleLockReq(p *Peer, data []byte) error {
 			return p.WritePacket(context.Background(), PacketLockRes, append(data, Aye))
 		}
 		// return nay
+		log.Printf("[fleet] rejecting request for lock %s by %s:%d because already belonging to %s:%d", lk, o, t, g.owner, g.t)
 		return p.WritePacket(context.Background(), PacketLockRes, append(data, Nay))
 	}
 
@@ -273,6 +277,7 @@ func (a *Agent) handleLockReq(p *Peer, data []byte) error {
 	g = a.makeLock(lk, o, t, false)
 	if g == nil {
 		// failed → return nay
+		log.Printf("[fleet] rejecting request for lock %s because makeLock failed (race condition?)", lk)
 		return p.WritePacket(context.Background(), PacketLockRes, append(data, Nay))
 	}
 	g.timeout = time.Now().Add(10 * time.Second)
