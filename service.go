@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -66,7 +67,7 @@ func (a *Agent) Connect(id string, service string) (net.Conn, error) {
 	cfg.ServerName = id
 	cfg.NextProtos = []string{"p2p"}
 
-	c, err := tls.Dial("tcp", p.addr.IP.String()+":61337", cfg)
+	c, err := tls.Dial("tcp", p.addr.IP.String()+":"+strconv.FormatInt(int64(a.port), 10), cfg)
 	if err != nil {
 		log.Printf("[fleet] p2p connect error: %s", err)
 		return nil, err

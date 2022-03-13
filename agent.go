@@ -14,6 +14,7 @@ import (
 	"os"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -46,6 +47,7 @@ type Agent struct {
 
 	peers      map[string]*Peer
 	peersMutex sync.RWMutex
+	port       int // default 61337
 
 	services  map[string]chan net.Conn
 	svcMutex  sync.RWMutex
@@ -78,18 +80,19 @@ type Agent struct {
 }
 
 // New will just initialize a basic agent without any settings
-func New() *Agent {
+func New(opts ...AgentOption) *Agent {
 	a := spawn()
+	a.port = 61337
+	for _, o := range opts {
+		o.apply(a)
+	}
 	a.start()
 	return a
 }
 
 // return a new agent using the provided GetFile method
 func WithGetFile(f GetFileFunc) *Agent {
-	a := spawn()
-	a.GetFile = f
-	a.start()
-	return a
+	return New(f)
 }
 
 func spawn() *Agent {
@@ -173,8 +176,8 @@ func (a *Agent) doInit(token *jwt.Token) (err error) {
 	a.inCfg.ClientAuth = tls.RequireAndVerifyClientCert
 	a.inCfg.ClientCAs = a.ca
 
-	a.socket, err = tls.Listen("tcp", ":61337", a.inCfg)
-	log.Printf("[agent] Listening on :61337")
+	a.socket, err = tls.Listen("tcp", ":"+strconv.FormatInt(int64(a.port), 10), a.inCfg)
+	log.Printf("[agent] Listening on :%d", a.port)
 
 	// create a transport object for http queries
 	a.transport = &http.Transport{
@@ -601,7 +604,7 @@ func (a *Agent) dialPeer(host, name string, id string) {
 	cfg.ServerName = id
 	cfg.NextProtos = []string{"fbin"}
 
-	c, err := tls.Dial("tcp", host+":61337", cfg)
+	c, err := tls.Dial("tcp", host+":"+strconv.FormatInt(int64(a.port), 10), cfg)
 	if err != nil {
 		log.Printf("[fleet] failed to connect to peer %s(%s): %s", name, id, err)
 		return
