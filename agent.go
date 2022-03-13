@@ -785,6 +785,13 @@ func (a *Agent) CountPeers() int {
 	return len(a.peers)
 }
 
+// GetPeersCount return the number of existing peers, connected or not. The
+// value may be more than the number of entries GetPeers will return as some
+// peers may be down or unavailable.
+func (a *Agent) GetPeersCount() uint32 {
+	return atomic.LoadUint32(&a.peersCount)
+}
+
 func (a *Agent) GetPeers() []*Peer {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()

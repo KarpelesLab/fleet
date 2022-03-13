@@ -14,6 +14,9 @@ const (
 
 	PacketCustom    = 0xa000 // 0xa000 ~ 0xafff are custom channels
 	PacketCustomMax = 0xafff
+
+	Aye = 1
+	Nay = 0
 )
 
 // Custom returns a packet id for a given custom packet

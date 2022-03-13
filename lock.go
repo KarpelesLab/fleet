@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -39,21 +40,22 @@ func (a *Agent) getLock(name string) *globalLock {
 }
 
 // create a new lock
-func (a *Agent) makeLock(name, owner string, tm uint64) *globalLock {
+func (a *Agent) makeLock(name, owner string, tm uint64, force bool) *globalLock {
 	a.globalLocksLk.Lock()
 	defer a.globalLocksLk.Unlock()
 
-	if v, ok := a.globalLocks[name]; ok && v.valid() {
-		return nil
+	if v, ok := a.globalLocks[name]; ok {
+		if !force && v.valid() {
+			return nil
+		}
+		go v.release() // this will lock because we already hold a.globalLocksLk
 	}
-
-	// note: no need to release expired locks
 
 	lk := &globalLock{
 		name:    name,
 		owner:   owner,
 		t:       tm,
-		ch:      make(chan uint32),
+		ch:      make(chan uint32, 1),
 		a:       a,
 		timeout: time.Now().Add(30 * time.Minute),
 	}
@@ -156,7 +158,7 @@ func (a *Agent) Lock(ctx context.Context, name string) (*LocalLock, error) {
 		tm := uint64(now.Unix()) * 1000000
 		tm += uint64(now.Nanosecond()) / 1000 // convert to microsecond
 
-		lk = a.makeLock(name, a.id, tm)
+		lk = a.makeLock(name, a.id, tm, false)
 		if lk == nil {
 			// failed to acquire, retry
 			select {
@@ -228,4 +230,139 @@ func (lk *globalLock) valid() bool {
 		return false
 	}
 	return true
+}
+
+func (a *Agent) handleLockReq(p *Peer, data []byte) error {
+	lk, t, o, _ := decodeLockBytes(data)
+	g := a.getLock(lk)
+	if g != nil {
+		if g.t == t && g.owner == o {
+			// return aye (already obtained)
+			return p.WritePacket(context.Background(), PacketLockRes, append(data, Aye))
+		}
+		// return nay
+		return p.WritePacket(context.Background(), PacketLockRes, append(data, Nay))
+	}
+
+	// obtain lock
+	g = a.makeLock(lk, o, t, false)
+	if g == nil {
+		// failed → return nay
+		return p.WritePacket(context.Background(), PacketLockRes, append(data, Nay))
+	}
+	g.timeout = time.Now().Add(10 * time.Second)
+	g.lk.Unlock()
+
+	// good → return aye
+	return p.WritePacket(context.Background(), PacketLockRes, append(data, Aye))
+}
+
+func (a *Agent) handleLockRes(p *Peer, data []byte) error {
+	lk, t, o, data := decodeLockBytes(data)
+	if len(data) < 1 {
+		return nil
+	}
+	res := data[0]
+	g := a.getLock(lk)
+	if g == nil {
+		// can't
+		return nil
+	}
+	if g.t != t || g.owner != o {
+		// wrong lock
+		return nil
+	}
+
+	id := p.id
+	cnt := a.GetPeersCount()
+
+	g.lk.Lock()
+	defer g.lk.Unlock()
+
+	// check if peer is already in aye or nay
+	for _, v := range g.aye {
+		if v == id {
+			return nil
+		}
+	}
+	for _, v := range g.nay {
+		if v == id {
+			return nil
+		}
+	}
+	switch res {
+	case Aye:
+		g.aye = append(g.aye, id)
+	case Nay:
+		g.nay = append(g.nay, id)
+	}
+
+	if g.getStatus() != 0 {
+		return nil
+	}
+
+	if uint32(len(g.aye)) >= ((cnt / 2) + 1) {
+		// we got a aye
+		g.setStatus(1)
+		return nil
+	}
+	if uint32(len(g.nay)) >= ((cnt / 3) + 1) {
+		// give up on this
+		g.setStatus(2)
+		return nil
+	}
+	return nil
+}
+
+func (a *Agent) handleLockConfirm(p *Peer, data []byte) error {
+	lk, t, o, _ := decodeLockBytes(data)
+	g := a.getLock(lk)
+	if g == nil {
+		// make lock
+		g = a.makeLock(lk, o, t, true)
+		g.timeout = time.Now().Add(30 * time.Minute)
+		g.setStatus(1)
+		g.lk.Unlock()
+		return nil
+	}
+	g.lk.Lock()
+	defer g.lk.Unlock()
+
+	if g.t != t || g.owner != o {
+		// update info
+		g.t = t
+		g.owner = o
+		g.local = false
+	}
+	g.timeout = time.Now().Add(30 * time.Minute)
+	g.setStatus(1)
+	return nil
+}
+
+func (a *Agent) handleLockRelease(p *Peer, data []byte) error {
+	lk, t, o, _ := decodeLockBytes(data)
+	g := a.getLock(lk)
+	if g == nil {
+		return nil
+	}
+	if g.owner != o || g.t != t {
+		return nil
+	}
+	g.release()
+	return nil
+}
+
+func (lk *globalLock) getStatus() uint32 {
+	return atomic.LoadUint32(&lk.status)
+}
+
+func (lk *globalLock) setStatus(v uint32) {
+	if lk.getStatus() == v {
+		return
+	}
+	atomic.StoreUint32(&lk.status, v)
+	select {
+	case lk.ch <- v:
+	default:
+	}
 }

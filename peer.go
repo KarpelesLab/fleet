@@ -198,6 +198,14 @@ func (p *Peer) handleBinary(pc uint16, data []byte) error {
 		}
 		p.Ping = time.Since(time.Time(t))
 		return nil
+	case PacketLockReq:
+		return p.a.handleLockReq(p, data)
+	case PacketLockRes:
+		return p.a.handleLockRes(p, data)
+	case PacketLockConfirm:
+		return p.a.handleLockConfirm(p, data)
+	case PacketLockRelease:
+		return p.a.handleLockRelease(p, data)
 	case PacketClose:
 		log.Printf("[fleet] Closing peer connection because: %s", data)
 		return io.EOF
