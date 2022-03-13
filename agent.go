@@ -47,6 +47,7 @@ type Agent struct {
 
 	peers      map[string]*Peer
 	peersMutex sync.RWMutex
+	peersCount int
 	port       int // default 61337
 
 	services  map[string]chan net.Conn
@@ -620,6 +621,10 @@ func (a *Agent) dialPeer(host, name string, id string) {
 }
 
 func (a *Agent) IsConnected(id string) bool {
+	if id == a.id {
+		// we are "connected" to self
+		return true
+	}
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
 	_, ok := a.peers[id]

@@ -198,6 +198,8 @@ func (a *Agent) jwtPingDirectory(dir string, jwt []byte, client *http.Client) er
 	//log.Printf("[fleet] debug ping response: %+v", res)
 	a.IP = res.Myself.IP
 
+	a.peersCount = len(res.Namespace.Peers)
+
 	for _, peer := range res.Namespace.Peers {
 		// check if we're connected
 		if a.IsConnected(peer.Private.Id) {
