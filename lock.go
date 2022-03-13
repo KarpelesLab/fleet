@@ -60,7 +60,7 @@ func (a *Agent) DebugLocks(w io.Writer) {
 	fmt.Fprintf(w, "Locks:\n")
 
 	for _, l := range lks {
-		fmt.Fprintf(w, " * %s t=%d owner=%s status=%d local=%v\n", l.name, l.t, l.owner, l.status, l.local)
+		fmt.Fprintf(w, " * %s t=%d owner=%s status=%d local=%v timeout=%s\n", l.name, l.t, l.owner, l.status, l.local, l.timeout)
 	}
 }
 
@@ -438,6 +438,7 @@ func (a *Agent) handleLockRelease(p *Peer, data []byte) error {
 	if g.owner != o || g.t != t {
 		return nil
 	}
+	log.Printf("[fleet] processing release for %s", lk)
 	g.setStatus(2)
 	g.release()
 	return nil
