@@ -3,6 +3,8 @@ package fleet
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
+	"io"
 	"log"
 	"runtime"
 	"sync"
@@ -40,6 +42,28 @@ func (a *Agent) getLock(name string) *globalLock {
 	return nil
 }
 
+func (a *Agent) getLocks() []*globalLock {
+	a.globalLocksLk.RLock()
+	defer a.globalLocksLk.RUnlock()
+
+	res := make([]*globalLock, 0, len(a.globalLocks))
+
+	for _, l := range a.globalLocks {
+		res = append(res, l)
+	}
+	return res
+}
+
+func (a *Agent) DebugLocks(w io.Writer) {
+	lks := a.getLocks()
+
+	fmt.Fprintf(w, "Locks:\n")
+
+	for _, l := range lks {
+		fmt.Fprintf(w, " * %s t=%d owner=%s status=%d local=%v\n", l.name, l.t, l.owner, l.status, l.local)
+	}
+}
+
 // create a new lock
 func (a *Agent) makeLock(name, owner string, tm uint64, force bool) *globalLock {
 	a.globalLocksLk.Lock()
@@ -49,8 +73,9 @@ func (a *Agent) makeLock(name, owner string, tm uint64, force bool) *globalLock 
 		if !force && v.valid() {
 			return nil
 		}
+		// disable lock
 		v.setStatus(2)
-		go v.release() // this will lock because we already hold a.globalLocksLk
+		v.broadcastRelease()
 	}
 
 	lk := &globalLock{
@@ -68,6 +93,11 @@ func (a *Agent) makeLock(name, owner string, tm uint64, force bool) *globalLock 
 }
 
 func (l *globalLock) release() {
+	l.broadcastRelease()
+	l.dereg()
+}
+
+func (l *globalLock) broadcastRelease() {
 	log.Printf("[fleet] releasing lock %s %d %s", l.name, l.t, l.owner)
 	if l.local {
 		// broadcast release
@@ -75,8 +105,6 @@ func (l *globalLock) release() {
 		defer cancel()
 		l.a.BroadcastPacket(ctx, PacketLockRelease, l.Key())
 	}
-
-	l.dereg()
 }
 
 func (l *globalLock) dereg() {
