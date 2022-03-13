@@ -3,6 +3,7 @@ package fleet
 import (
 	"context"
 	"encoding/binary"
+	"log"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -48,6 +49,7 @@ func (a *Agent) makeLock(name, owner string, tm uint64, force bool) *globalLock 
 		if !force && v.valid() {
 			return nil
 		}
+		v.setStatus(2)
 		go v.release() // this will lock because we already hold a.globalLocksLk
 	}
 
@@ -139,6 +141,9 @@ func (a *Agent) Lock(ctx context.Context, name string) (*LocalLock, error) {
 		return nil, ErrInvalidLockName
 	}
 
+	log.Printf("[fleet] Attempting to acquire lock %s", name)
+	start := time.Now()
+
 	// first, let's check if this isn't already locked, if it is, wait
 	for {
 		lk := a.getLock(name)
@@ -146,7 +151,7 @@ func (a *Agent) Lock(ctx context.Context, name string) (*LocalLock, error) {
 		if lk != nil {
 			select {
 			case <-lk.ch:
-				// ok
+				// something has changed
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			}
@@ -176,6 +181,8 @@ func (a *Agent) Lock(ctx context.Context, name string) (*LocalLock, error) {
 		// attempt acquire
 		timeout := time.NewTimer(5 * time.Second)
 
+		log.Printf("[fleet] Lock %s acquire attempt with t=%d", name, tm)
+
 	acqLoop:
 		for {
 			select {
@@ -194,16 +201,20 @@ func (a *Agent) Lock(ctx context.Context, name string) (*LocalLock, error) {
 					res := &LocalLock{lk: lk}
 					runtime.SetFinalizer(res, finalizeLocalLock)
 					timeout.Stop()
+					go a.BroadcastPacket(context.Background(), PacketLockConfirm, lk.Key())
+					log.Printf("[fleet] Lock %s acquired in %s", name, time.Since(start))
 					return res, nil
 				}
 				if st == 2 {
-					// reached too many nay
+					// reached too many nay or another lock confirmed on top of us
 					lk.release()
+					log.Printf("[fleet] Lock %s failed acquire, will retry", name)
 					break acqLoop
 				}
 			case <-timeout.C:
 				// reached timeout
 				lk.release()
+				log.Printf("[fleet] Lock %s acquire timed out, will retry", name)
 				break acqLoop
 			case <-ctx.Done():
 				lk.release()
@@ -298,8 +309,10 @@ func (a *Agent) handleLockRes(p *Peer, data []byte) error {
 	}
 	switch res {
 	case Aye:
+		log.Printf("[fleet] got AYE from %s for %s", id, lk)
 		g.aye = append(g.aye, id)
 	case Nay:
+		log.Printf("[fleet] got NAY from %s for %s", id, lk)
 		g.nay = append(g.nay, id)
 	}
 
