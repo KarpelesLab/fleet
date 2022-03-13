@@ -180,7 +180,7 @@ func (a *Agent) Lock(ctx context.Context, name string) (*LocalLock, error) {
 
 		log.Printf("[fleet] Lock %s acquire attempt with t=%d", name, tm)
 
-		if a.GetPeersCount() == 1 {
+		if a.GetPeersCount() <= 1 {
 			// we can't have global locks with no peers
 			lk.setStatus(1)
 			res := &LocalLock{lk: lk}
