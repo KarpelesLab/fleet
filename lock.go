@@ -50,7 +50,7 @@ func (a *Agent) makeLock(name, owner string, tm uint64, force bool) *globalLock 
 			return nil
 		}
 		v.setStatus(2)
-		go v.release() // this will lock because we already hold a.globalLocksLk
+		v.release() // this will lock because we already hold a.globalLocksLk
 	}
 
 	lk := &globalLock{
@@ -76,6 +76,10 @@ func (l *globalLock) release() {
 		l.a.BroadcastPacket(ctx, PacketLockRelease, l.Key())
 	}
 
+	l.dereg()
+}
+
+func (l *globalLock) dereg() {
 	l.a.globalLocksLk.Lock()
 	defer l.a.globalLocksLk.Unlock()
 
