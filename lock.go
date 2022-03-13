@@ -11,7 +11,7 @@ import (
 
 type LocalLock struct {
 	lk   *globalLock
-	once sync.Once
+	once sync.Once // once is used to ensure release() is done only once
 }
 
 type globalLock struct {
@@ -234,6 +234,9 @@ func (lk *globalLock) valid() bool {
 
 func (a *Agent) handleLockReq(p *Peer, data []byte) error {
 	lk, t, o, _ := decodeLockBytes(data)
+	if lk == "" {
+		return nil
+	}
 	g := a.getLock(lk)
 	if g != nil {
 		if g.t == t && g.owner == o {
@@ -259,6 +262,9 @@ func (a *Agent) handleLockReq(p *Peer, data []byte) error {
 
 func (a *Agent) handleLockRes(p *Peer, data []byte) error {
 	lk, t, o, data := decodeLockBytes(data)
+	if lk == "" {
+		return nil
+	}
 	if len(data) < 1 {
 		return nil
 	}
@@ -316,6 +322,9 @@ func (a *Agent) handleLockRes(p *Peer, data []byte) error {
 
 func (a *Agent) handleLockConfirm(p *Peer, data []byte) error {
 	lk, t, o, _ := decodeLockBytes(data)
+	if lk == "" {
+		return nil
+	}
 	g := a.getLock(lk)
 	if g == nil {
 		// make lock
@@ -341,6 +350,9 @@ func (a *Agent) handleLockConfirm(p *Peer, data []byte) error {
 
 func (a *Agent) handleLockRelease(p *Peer, data []byte) error {
 	lk, t, o, _ := decodeLockBytes(data)
+	if lk == "" {
+		return nil
+	}
 	g := a.getLock(lk)
 	if g == nil {
 		return nil
