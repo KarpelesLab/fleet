@@ -47,7 +47,7 @@ type Agent struct {
 
 	peers      map[string]*Peer
 	peersMutex sync.RWMutex
-	peersCount int
+	peersCount uint32
 	port       int // default 61337
 
 	services  map[string]chan net.Conn

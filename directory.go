@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"runtime/debug"
+	"sync/atomic"
 	"time"
 
 	"github.com/KarpelesLab/goupd"
@@ -198,7 +199,7 @@ func (a *Agent) jwtPingDirectory(dir string, jwt []byte, client *http.Client) er
 	//log.Printf("[fleet] debug ping response: %+v", res)
 	a.IP = res.Myself.IP
 
-	a.peersCount = len(res.Namespace.Peers)
+	atomic.StoreUint32(&a.peersCount, uint32(len(res.Namespace.Peers)))
 
 	for _, peer := range res.Namespace.Peers {
 		// check if we're connected
