@@ -82,6 +82,7 @@ func (l *globalLock) release() {
 	v, ok := l.a.globalLocks[l.name]
 	if !ok || v != l {
 		// wrong call?
+		log.Printf("[fleet] lock not released because ok=%v v=%p l=%p", ok, v, l)
 		return
 	}
 	delete(l.a.globalLocks, l.name)
@@ -395,6 +396,7 @@ func (a *Agent) handleLockRelease(p *Peer, data []byte) error {
 	if g.owner != o || g.t != t {
 		return nil
 	}
+	g.setStatus(2)
 	g.release()
 	return nil
 }
