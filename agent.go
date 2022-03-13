@@ -176,8 +176,14 @@ func (a *Agent) doInit(token *jwt.Token) (err error) {
 	a.inCfg.ClientAuth = tls.RequireAndVerifyClientCert
 	a.inCfg.ClientCAs = a.ca
 
-	a.socket, err = tls.Listen("tcp", ":"+strconv.FormatInt(int64(a.port), 10), a.inCfg)
-	log.Printf("[agent] Listening on :%d", a.port)
+	if a.socket == nil {
+		a.socket, err = tls.Listen("tcp", ":"+strconv.FormatInt(int64(a.port), 10), a.inCfg)
+		if err != nil {
+			log.Printf("[agent] failed to listen: %s")
+			return
+		}
+		log.Printf("[agent] Listening on :%d", a.port)
+	}
 
 	// create a transport object for http queries
 	a.transport = &http.Transport{
