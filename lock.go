@@ -178,10 +178,19 @@ func (a *Agent) Lock(ctx context.Context, name string) (*LocalLock, error) {
 		lk.local = true
 		lk.lk.Unlock()
 
+		log.Printf("[fleet] Lock %s acquire attempt with t=%d", name, tm)
+
+		if a.GetPeersCount() == 1 {
+			// we can't have global locks with no peers
+			lk.setStatus(1)
+			res := &LocalLock{lk: lk}
+			runtime.SetFinalizer(res, finalizeLocalLock)
+			log.Printf("[fleet] Lock %s acquired in %s (no other peers)", name, time.Since(start))
+			return res, nil
+		}
+
 		// attempt acquire
 		timeout := time.NewTimer(5 * time.Second)
-
-		log.Printf("[fleet] Lock %s acquire attempt with t=%d", name, tm)
 
 	acqLoop:
 		for {
