@@ -159,9 +159,7 @@ func (a *Agent) Lock(ctx context.Context, name string) (*LocalLock, error) {
 		}
 
 		// let's catch a lock
-		now := time.Now()
-		tm := uint64(now.Unix()) * 1000000
-		tm += uint64(now.Nanosecond()) / 1000 // convert to microsecond
+		tm := UniqueTimestamp()
 
 		lk = a.makeLock(name, a.id, tm, false)
 		if lk == nil {

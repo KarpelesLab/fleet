@@ -180,7 +180,7 @@ func (a *Agent) doInit(token *jwt.Token) (err error) {
 	if a.socket == nil {
 		a.socket, err = tls.Listen("tcp", ":"+strconv.FormatInt(int64(a.port), 10), a.inCfg)
 		if err != nil {
-			log.Printf("[agent] failed to listen: %s")
+			log.Printf("[agent] failed to listen: %s", err)
 			return
 		}
 		log.Printf("[agent] Listening on :%d", a.port)
