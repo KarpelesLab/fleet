@@ -78,6 +78,12 @@ func (a *Agent) newConn(c net.Conn) {
 	}
 }
 
+// TlsProtocols returns a list of TLS protocols managed by the fleet system
+// that should be directed to the fleet agent listener
+func TlsProtocols() []string {
+	return []string{"fbin", "p2p"}
+}
+
 func (a *Agent) handleFleetConn(tc *tls.Conn) {
 	// instanciate peer and fetch certificate
 	p := &Peer{
