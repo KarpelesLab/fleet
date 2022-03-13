@@ -330,12 +330,12 @@ func (a *Agent) handleLockRes(p *Peer, data []byte) error {
 	}
 	switch res {
 	case Aye:
-		log.Printf("[fleet] got AYE from %s for %s", id, lk)
 		g.aye = append(g.aye, id)
 	case Nay:
-		log.Printf("[fleet] got NAY from %s for %s", id, lk)
 		g.nay = append(g.nay, id)
 	}
+
+	log.Printf("[fleet] lock %s status: AYE/NAY = %d/%d", len(g.aye), len(g.nay))
 
 	if g.getStatus() != 0 {
 		return nil
