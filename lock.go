@@ -114,7 +114,7 @@ func (l *globalLock) dereg() {
 	v, ok := l.a.globalLocks[l.name]
 	if !ok || v != l {
 		// wrong call?
-		log.Printf("[fleet] lock not released because ok=%v v=%p l=%p", ok, v, l)
+		//log.Printf("[fleet] lock not released because ok=%v v=%p l=%p", ok, v, l)
 		return
 	}
 	delete(l.a.globalLocks, l.name)
@@ -314,7 +314,7 @@ func (a *Agent) handleLockReq(p *Peer, data []byte) error {
 			return p.WritePacket(context.Background(), PacketLockRes, append(data, Aye))
 		}
 		// return nay
-		log.Printf("[fleet] rejecting request for lock %s by %s:%d because already belonging to %s:%d", lk, o, t, g.owner, g.t)
+		//log.Printf("[fleet] rejecting request for lock %s by %s:%d because already belonging to %s:%d", lk, o, t, g.owner, g.t)
 		return p.WritePacket(context.Background(), PacketLockRes, append(data, Nay))
 	}
 
@@ -322,7 +322,7 @@ func (a *Agent) handleLockReq(p *Peer, data []byte) error {
 	g = a.makeLock(lk, o, t, false)
 	if g == nil {
 		// failed → return nay
-		log.Printf("[fleet] rejecting request for lock %s because makeLock failed (race condition?)", lk)
+		//log.Printf("[fleet] rejecting request for lock %s because makeLock failed (race condition?)", lk)
 		return p.WritePacket(context.Background(), PacketLockRes, append(data, Nay))
 	}
 	g.timeout = time.Now().Add(10 * time.Second)
@@ -375,7 +375,7 @@ func (a *Agent) handleLockRes(p *Peer, data []byte) error {
 		g.nay = append(g.nay, id)
 	}
 
-	log.Printf("[fleet] lock %s status: aye=%d nay=%d out of %d nodes", lk, len(g.aye), len(g.nay), cnt)
+	//log.Printf("[fleet] lock %s status: aye=%d nay=%d out of %d nodes", lk, len(g.aye), len(g.nay), cnt)
 
 	if g.getStatus() != 0 {
 		return nil
@@ -440,7 +440,6 @@ func (a *Agent) handleLockRelease(p *Peer, data []byte) error {
 	if g.owner != o || g.t != t {
 		return nil
 	}
-	log.Printf("[fleet] processing release for %s", lk)
 	g.setStatus(2)
 	g.release()
 	return nil
@@ -451,7 +450,6 @@ func (lk *globalLock) getStatus() uint32 {
 }
 
 func (lk *globalLock) setStatus(v uint32) {
-	log.Printf("[fleet] lock %s set status = %d (from %d)", lk.name, v, lk.getStatus())
 	for {
 		oldv := lk.getStatus()
 		if oldv >= v {
@@ -459,7 +457,6 @@ func (lk *globalLock) setStatus(v uint32) {
 			return
 		}
 		if atomic.CompareAndSwapUint32(&lk.status, oldv, v) {
-			log.Printf("[fleet] lock %s set status = %d (from %d) successful", v, oldv)
 			break
 		}
 	}
