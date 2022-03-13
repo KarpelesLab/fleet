@@ -50,7 +50,7 @@ func (a *Agent) makeLock(name, owner string, tm uint64, force bool) *globalLock 
 			return nil
 		}
 		v.setStatus(2)
-		v.release() // this will lock because we already hold a.globalLocksLk
+		go v.release() // this will lock because we already hold a.globalLocksLk
 	}
 
 	lk := &globalLock{
@@ -238,6 +238,16 @@ func (a *Agent) Lock(ctx context.Context, name string) (*LocalLock, error) {
 				return nil, ctx.Err()
 			}
 		}
+
+		// wait a small random time before retry (0~65536µs, or up to 65ms)
+		t := time.NewTimer(time.Duration(rand16()) * time.Microsecond)
+		select {
+		case <-t.C:
+			// things continue
+		case <-ctx.Done():
+			// things do not continue
+			return nil, ctx.Err()
+		}
 	}
 }
 
@@ -335,7 +345,7 @@ func (a *Agent) handleLockRes(p *Peer, data []byte) error {
 		g.nay = append(g.nay, id)
 	}
 
-	log.Printf("[fleet] lock %s status: AYE/NAY = %d/%d", len(g.aye), len(g.nay))
+	log.Printf("[fleet] lock %s status: aye=%d nay=%d out of %d nodes", lk, len(g.aye), len(g.nay), cnt)
 
 	if g.getStatus() != 0 {
 		return nil
