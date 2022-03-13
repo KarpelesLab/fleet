@@ -245,7 +245,9 @@ func (a *Agent) Lock(ctx context.Context, name string) (*LocalLock, error) {
 					res := &LocalLock{lk: lk}
 					runtime.SetFinalizer(res, finalizeLocalLock)
 					timeout.Stop()
-					go a.BroadcastPacket(context.Background(), PacketLockConfirm, lk.Key())
+					ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+					defer cancel()
+					a.BroadcastPacket(ctx, PacketLockConfirm, lk.Key())
 					log.Printf("[fleet] Lock %s acquired in %s", name, time.Since(start))
 					return res, nil
 				}
@@ -457,6 +459,7 @@ func (lk *globalLock) setStatus(v uint32) {
 			return
 		}
 		if atomic.CompareAndSwapUint32(&lk.status, oldv, v) {
+			log.Printf("[fleet] lock %s set status = %d (from %d) successful", v, oldv)
 			break
 		}
 	}
