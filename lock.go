@@ -68,9 +68,12 @@ func (a *Agent) makeLock(name, owner string, tm uint64, force bool) *globalLock 
 }
 
 func (l *globalLock) release() {
+	log.Printf("[fleet] releasing lock %s %d %s", l.name, l.t, l.owner)
 	if l.local {
 		// broadcast release
-		go l.a.BroadcastPacket(context.Background(), PacketLockRelease, l.Key())
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		l.a.BroadcastPacket(ctx, PacketLockRelease, l.Key())
 	}
 
 	l.a.globalLocksLk.Lock()
@@ -362,25 +365,16 @@ func (a *Agent) handleLockConfirm(p *Peer, data []byte) error {
 		return nil
 	}
 	g := a.getLock(lk)
-	if g == nil {
-		// make lock
-		g = a.makeLock(lk, o, t, true)
+	if g != nil && g.t == t && g.owner == o {
 		g.timeout = time.Now().Add(30 * time.Minute)
-		g.setStatus(1)
-		g.lk.Unlock()
 		return nil
 	}
-	g.lk.Lock()
-	defer g.lk.Unlock()
 
-	if g.t != t || g.owner != o {
-		// update info
-		g.t = t
-		g.owner = o
-		g.local = false
-	}
+	// make lock
+	g = a.makeLock(lk, o, t, true)
 	g.timeout = time.Now().Add(30 * time.Minute)
-	g.setStatus(1)
+	g.status = 1
+	g.lk.Unlock()
 	return nil
 }
 
