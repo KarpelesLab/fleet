@@ -305,7 +305,7 @@ func (p *Peer) processAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 
 	if ann.Idx <= p.annIdx {
 		// already seen this announce, ignore it
-		log.Printf("[agent] got announce %d but already seen %d", ann.Idx, p.annIdx)
+		//log.Printf("[agent] got announce %d but already seen %d", ann.Idx, p.annIdx)
 		return nil
 	}
 
