@@ -8,7 +8,7 @@ import (
 var globalTimestampValue uint64
 
 // UniqueTimestamp returns a uint64 timestamp in microsecond that is unique,
-// that is even if called multiple times in the same millisecond each call will
+// so that even if called multiple times in the same millisecond each call will
 // return a different value.
 //
 // This can be safely called from multiple threads, it does not lock.

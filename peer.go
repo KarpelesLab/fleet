@@ -108,7 +108,7 @@ func (a *Agent) handleFleetConn(tc *tls.Conn) {
 		return
 	}
 
-	log.Printf("[fleet] Connection with peer %s established", p.id)
+	log.Printf("[fleet] Connection with peer %s(%s) established", p.name, p.id)
 
 	go p.sendHandshake(context.Background()) // will disappear
 	go p.register()
@@ -163,9 +163,9 @@ func (p *Peer) loop() {
 
 		if err != nil {
 			if err == io.EOF {
-				log.Printf("[fleet] disconnected peer %s (received EOF)", p.id)
+				log.Printf("[fleet] disconnected peer %s(%s) (received EOF)", p.name, p.id)
 			} else {
-				log.Printf("[fleet] failed to read from peer %s: %s", p.id, err)
+				log.Printf("[fleet] failed to read from peer %s(%s): %s", p.name, p.id, err)
 			}
 
 			if p.valid {
@@ -470,7 +470,7 @@ func (p *Peer) WritePacket(ctx context.Context, pc uint16, data []byte) error {
 }
 
 func (p *Peer) Close(reason string) error {
-	log.Printf("[fleet] Closing connection to %s: %s", p.id, reason)
+	log.Printf("[fleet] Closing connection to %s(%s): %s", p.name, p.id, reason)
 	p.c.SetWriteDeadline(time.Now().Add(1 * time.Second))
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
