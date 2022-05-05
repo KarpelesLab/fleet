@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -36,6 +37,10 @@ func WithIssuer(url string) *Agent {
 	return WithGetFile(func(a *Agent, f string) ([]byte, error) {
 		if f == "internal_key.key" {
 			// this will result in a loop call when using getLocalKey(), so reject it now
+			fn, err := findFile(f)
+			if err == nil {
+				return ioutil.ReadFile(fn)
+			}
 			return nil, fs.ErrNotExist
 		}
 
