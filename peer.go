@@ -542,3 +542,10 @@ func (p *Peer) setMeta(v map[string]interface{}) {
 
 	p.meta = v
 }
+
+func (p *Peer) String() string {
+	if p.name != "" {
+		return p.name
+	}
+	return p.id
+}
