@@ -185,9 +185,10 @@ func (a *Agent) Lock(ctx context.Context, name string) (*LocalLock, error) {
 		lk := a.getLock(name)
 
 		if lk != nil {
+			// lock is already acquired or attempting to be acquired by someone
 			select {
 			case <-lk.ch:
-				// something has changed
+				// something has changed (lock released?)
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			}
