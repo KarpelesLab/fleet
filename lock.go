@@ -276,6 +276,7 @@ func (a *Agent) Lock(ctx context.Context, name string) (*LocalLock, error) {
 			// things continue
 		case <-ctx.Done():
 			// things do not continue
+			t.Stop()
 			return nil, ctx.Err()
 		}
 	}
