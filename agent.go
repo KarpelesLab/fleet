@@ -166,8 +166,8 @@ func (a *Agent) doInit(token *jwt.Token) (err error) {
 	a.outCfg = new(tls.Config)
 
 	// set certificates
-	a.inCfg.GetCertificate = a.GetInternalCertificate
-	a.outCfg.GetCertificate = a.GetInternalCertificate
+	a.inCfg.GetCertificate = a.intCert.GetCertificate
+	a.outCfg.GetClientCertificate = a.intCert.GetClientCertificate
 	a.inCfg.RootCAs = a.ca
 	a.outCfg.RootCAs = a.ca
 
