@@ -41,7 +41,6 @@ type Agent struct {
 	inCfg  *tls.Config
 	outCfg *tls.Config
 	ca     *x509.CertPool
-	cert   tls.Certificate
 
 	announceIdx uint64
 
@@ -78,6 +77,10 @@ type Agent struct {
 	// locking
 	globalLocks   map[string]*globalLock
 	globalLocksLk sync.RWMutex
+
+	// cert cache
+	pubCert *crtCache
+	intCert *crtCache
 }
 
 // New will just initialize a basic agent without any settings
@@ -111,6 +114,8 @@ func spawn() *Agent {
 		dbWatch:     make(map[string]DbWatchCallback),
 		globalLocks: make(map[string]*globalLock),
 	}
+	a.pubCert = &crtCache{a: a, k: "public_key"}
+	a.intCert = &crtCache{a: a, k: "internal_key"}
 	runtime.SetFinalizer(a, closeAgentect)
 	return a
 }
@@ -153,11 +158,6 @@ func (a *Agent) doInit(token *jwt.Token) (err error) {
 		}
 	}
 
-	a.cert, err = a.GetInternalCert()
-	if err != nil {
-		return
-	}
-
 	// load CA
 	a.ca, _ = a.GetCA()
 
@@ -166,8 +166,8 @@ func (a *Agent) doInit(token *jwt.Token) (err error) {
 	a.outCfg = new(tls.Config)
 
 	// set certificates
-	a.inCfg.Certificates = []tls.Certificate{a.cert}
-	a.outCfg.Certificates = []tls.Certificate{a.cert}
+	a.inCfg.GetCertificate = a.GetInternalCertificate
+	a.outCfg.GetCertificate = a.GetInternalCertificate
 	a.inCfg.RootCAs = a.ca
 	a.outCfg.RootCAs = a.ca
 

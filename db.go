@@ -262,6 +262,26 @@ func (a *Agent) dbSimpleGet(bucket, key []byte) (r []byte, err error) {
 	return
 }
 
+// dbFleetLoad is similar to dbFleetGet except it always attempt to load data from getFile first
+func (a *Agent) dbFleetLoad(keyname string) ([]byte, error) {
+	// attempt to locate file named a.b for key a:b
+	filename := strings.ReplaceAll(keyname, ":", ".")
+	if strings.HasSuffix(filename, ".crt") {
+		// replace with .pem
+		filename = strings.TrimSuffix(filename, ".crt") + ".pem"
+	}
+
+	var data []byte
+	err := a.getFile(filename, func(v []byte) error {
+		data = v
+		return a.dbSimpleSet([]byte("fleet"), []byte(keyname), v)
+	})
+	if err == nil {
+		return data, nil
+	}
+	return a.dbSimpleGet([]byte("fleet"), []byte(keyname))
+}
+
 func (a *Agent) dbFleetGet(keyname string) ([]byte, error) {
 	// for example keyname="internal_key:jwt"
 

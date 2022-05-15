@@ -184,32 +184,9 @@ func (a *Agent) GenInternalCert() (tls.Certificate, error) {
 	return tls.Certificate{Certificate: [][]byte{crt_der}, PrivateKey: key}, nil
 }
 
-func (a *Agent) GetInternalCert() (tls.Certificate, error) {
-	// get internal certificate
-	crt, err := a.dbFleetGet("internal_key:crt")
-	if err != nil {
-		return tls.Certificate{}, err
-	}
-	key, err := a.dbFleetGet("internal_key:key")
-	if err != nil {
-		return tls.Certificate{}, err
-	}
-
-	return tls.X509KeyPair(crt, key)
-}
-
-func (a *Agent) GetDefaultPublicCert() (tls.Certificate, error) {
-	// get internal certificate
-	crt, err := a.dbFleetGet("public_key:crt")
-	if err != nil {
-		return tls.Certificate{}, err
-	}
-	key, err := a.dbFleetGet("public_key:key")
-	if err != nil {
-		return tls.Certificate{}, err
-	}
-
-	return tls.X509KeyPair(crt, key)
+// return internal certificate (cached)
+func (a *Agent) GetInternalCertificate(h *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return a.intCert.GetCertificate(h)
 }
 
 func (a *Agent) GetCA() (*x509.CertPool, error) {
@@ -251,45 +228,34 @@ func (a *Agent) GetCA() (*x509.CertPool, error) {
 // GetTlsConfig returns TLS config suitable for making public facing ssl
 // servers.
 func (a *Agent) GetTlsConfig() (*tls.Config, error) {
-	if cert, err := a.GetDefaultPublicCert(); err == nil {
-		cfg := new(tls.Config)
-		cfg.Certificates = []tls.Certificate{cert}
-		a.SeedTlsConfig(cfg)
-		a.ConfigureTlsServer(cfg)
-		return cfg, nil
+	cfg := new(tls.Config)
+	cfg.GetCertificate = func(h *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		if crt, err := a.pubCert.GetCertificate(h); err == nil {
+			return crt, nil
+		}
+		return a.intCert.GetCertificate(h)
 	}
+	a.SeedTlsConfig(cfg)
+	a.ConfigureTlsServer(cfg)
+	return cfg, nil
+}
 
-	if cert, err := a.GetInternalCert(); err == nil {
-		cfg := new(tls.Config)
-		cfg.Certificates = []tls.Certificate{cert}
-		a.SeedTlsConfig(cfg)
-		a.ConfigureTlsServer(cfg)
-		return cfg, nil
-	}
-
-	return nil, errors.New("failed to load TLS certificates")
+func (a *Agent) GetPublicCertificate(h *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return a.pubCert.GetCertificate(h)
 }
 
 func (a *Agent) GetInternalTlsConfig() (*tls.Config, error) {
-	if cert, err := a.GetInternalCert(); err == nil {
-		cfg := new(tls.Config)
-		cfg.Certificates = []tls.Certificate{cert}
-		a.SeedTlsConfig(cfg)
-		a.ConfigureTlsServer(cfg)
-		return cfg, nil
-	}
-
-	return nil, errors.New("failed to load TLS certificates")
+	cfg := new(tls.Config)
+	cfg.GetCertificate = a.intCert.GetCertificate
+	a.SeedTlsConfig(cfg)
+	a.ConfigureTlsServer(cfg)
+	return cfg, nil
 }
 
 func (a *Agent) GetClientTlsConfig() (*tls.Config, error) {
-	if cert, err := a.GetInternalCert(); err == nil {
-		cfg := new(tls.Config)
-		cfg.Certificates = []tls.Certificate{cert}
-		return cfg, nil
-	}
-
-	return nil, errors.New("failed to load TLS certificates")
+	cfg := new(tls.Config)
+	cfg.GetClientCertificate = a.intCert.GetClientCertificate
+	return cfg, nil
 }
 
 func (a *Agent) ConfigureTlsServer(cfg *tls.Config) {
