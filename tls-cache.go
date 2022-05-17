@@ -13,32 +13,37 @@ type crtCache struct {
 	lk  sync.Mutex
 	t   time.Time
 	crt *tls.Certificate
+	err error
 }
 
 func (c *crtCache) GetClientCertificate(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
-	// TODO
-	return c.GetCertificate(nil)
+	crt, err := c.GetCertificate(nil)
+	if err != nil {
+		// error happened, but we don't care, let's just try without certificate.
+		// Go documentation: GetClientCertificate must return non-nil
+		return &tls.Certificate{}, nil
+	}
+	return crt, nil
 }
 
 func (c *crtCache) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 	if time.Since(c.t) < time.Hour*24 {
-		return c.crt, nil
+		return c.crt, c.err
 	}
 	c.lk.Lock()
 	defer c.lk.Unlock()
 
 	if time.Since(c.t) < time.Hour*24 {
-		return c.crt, nil
+		return c.crt, c.err
 	}
 	c.t = time.Now()
 
-	var err error
-	c.crt, err = c.loadCert()
-	if err != nil {
-		log.Printf("[tls] Failed to fetch %s certificate: %s", c.k, err)
+	c.crt, c.err = c.loadCert()
+	if c.err != nil {
+		log.Printf("[tls] Failed to fetch %s certificate: %s", c.k, c.err)
 	}
 
-	return c.crt, nil
+	return c.crt, c.err
 }
 
 func (c *crtCache) loadCert() (*tls.Certificate, error) {
