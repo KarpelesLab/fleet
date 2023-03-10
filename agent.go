@@ -47,7 +47,7 @@ type Agent struct {
 	peers      map[string]*Peer
 	peersMutex sync.RWMutex
 	peersCount uint32
-	port       int // default 61337
+	port       int // random
 
 	services  map[string]chan net.Conn
 	svcMutex  sync.RWMutex
@@ -86,7 +86,6 @@ type Agent struct {
 // New will just initialize a basic agent without any settings
 func New(opts ...AgentOption) *Agent {
 	a := spawn()
-	a.port = 61337
 	for _, o := range opts {
 		o.apply(a)
 	}
@@ -178,11 +177,14 @@ func (a *Agent) doInit(token *jwt.Token) (err error) {
 	a.inCfg.ClientCAs = a.ca
 
 	if a.socket == nil {
-		a.socket, err = tls.Listen("tcp", ":"+strconv.FormatInt(int64(a.port), 10), a.inCfg)
+		sock, err := net.ListenTCP("tcp", &net.TCPAddr{Port: a.port})
 		if err != nil {
 			log.Printf("[agent] failed to listen: %s", err)
-			return
+			return err
 		}
+		// update a.port
+		a.port = sock.Addr().(*net.TCPAddr).Port
+		a.socket = tls.NewListener(sock, a.inCfg)
 		log.Printf("[agent] Listening on :%d", a.port)
 	}
 
