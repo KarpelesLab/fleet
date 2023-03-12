@@ -107,6 +107,7 @@ func spawn() *Agent {
 	a := &Agent{
 		id:          local,
 		name:        local,
+		port:        61337,
 		peers:       make(map[string]*Peer),
 		services:    make(map[string]chan net.Conn),
 		rpc:         make(map[uintptr]chan *PacketRpcResponse),
@@ -182,7 +183,7 @@ func (a *Agent) doInit(token *jwt.Token) (err error) {
 			log.Printf("[agent] failed to listen: %s", err)
 			return err
 		}
-		// update a.port
+		// update a.port (will be the same value if it wasn't 0)
 		a.port = sock.Addr().(*net.TCPAddr).Port
 		a.socket = tls.NewListener(sock, a.inCfg)
 		log.Printf("[agent] Listening on :%d", a.port)
