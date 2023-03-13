@@ -35,19 +35,25 @@ func (a *Agent) initDb() {
 	}
 }
 
-// simple db get for program usage
+// DbGet will get a value from the shared fleet database
 func (a *Agent) DbGet(key string) ([]byte, error) {
 	v, err := a.dbSimpleGet([]byte("app"), []byte(key))
 	return v, err
 }
 
-// simple db set for program usage
+// DbSet will set a value into the shared fleet database
 func (a *Agent) DbSet(key string, value []byte) error {
 	return a.feedDbSetBC([]byte("app"), []byte(key), value, DbNow())
 }
 
+// DbDelete will remove a value from the shared fleet database
+func (a *Agent) DbDelete(key string) error {
+	return a.feedDbSetBC([]byte("app"), []byte(key), nil, DbNow())
+}
+
 // DbWatch will trigger the cb function upon updates of the given key
 // Special key "*" covers all keys (can only be one callback for a key)
+// If the value is nil, it means it is being deleted
 func (a *Agent) DbWatch(key string, cb func(string, []byte)) {
 	a.dbWatchLock.Lock()
 	defer a.dbWatchLock.Unlock()
@@ -156,6 +162,10 @@ func (a *Agent) feedDbSet(bucket, key, val []byte, v DbStamp) error {
 		err = vl.Put(append(vBin, fk...), fk)
 		if err != nil {
 			return err
+		}
+
+		if val == nil {
+			return b.Delete(key)
 		}
 
 		return b.Put(key, val)
