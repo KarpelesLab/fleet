@@ -183,11 +183,11 @@ func (a *Agent) dbGetVersion(bucket, key []byte) (val []byte, stamp DbStamp, err
 	err = a.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucket)
 		if b == nil {
-			return os.ErrNotExist
+			return fs.ErrNotExist
 		}
 		v := b.Get(key)
 		if v == nil {
-			return os.ErrNotExist
+			return fs.ErrNotExist
 		}
 		val = make([]byte, len(v))
 		copy(val, v)
@@ -259,11 +259,11 @@ func (a *Agent) dbSimpleGet(bucket, key []byte) (r []byte, err error) {
 	err = a.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucket)
 		if b == nil {
-			return os.ErrNotExist
+			return fs.ErrNotExist
 		}
 		v := b.Get(key)
 		if v == nil {
-			return os.ErrNotExist
+			return fs.ErrNotExist
 		}
 		r = make([]byte, len(v))
 		copy(r, v)
@@ -347,7 +347,7 @@ func (a *Agent) NewDbCursor(bucket []byte) (*DbCursor, error) {
 	r.bucket = tx.Bucket(bucket)
 	if r.bucket == nil {
 		tx.Rollback()
-		return nil, os.ErrNotExist
+		return nil, fs.ErrNotExist
 	}
 
 	r.cursor = r.bucket.Cursor()
