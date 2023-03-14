@@ -233,6 +233,9 @@ func (a *Agent) GetTlsConfig() (*tls.Config, error) {
 		if crt, err := a.pubCert.GetCertificate(h); err == nil {
 			return crt, nil
 		}
+		if h.ServerName != "" {
+			return GetSelfsignedCertificate(h.ServerName)
+		}
 		return a.intCert.GetCertificate(h)
 	}
 	a.SeedTlsConfig(cfg)
