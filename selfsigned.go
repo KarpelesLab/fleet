@@ -89,6 +89,11 @@ func GetSelfsignedCertificate(n string) (*tls.Certificate, error) {
 		Leaf:        pc,
 	}
 
+	if len(certSelfCache) > 1024 {
+		// cache is growing too much, reset it
+		certSelfCache = make(map[string]*tls.Certificate)
+	}
+
 	certSelfCache[n] = tlsCrt
 
 	return tlsCrt, nil
