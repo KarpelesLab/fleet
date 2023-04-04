@@ -21,7 +21,7 @@ import (
 	"github.com/KarpelesLab/goupd"
 )
 
-func WithIssuer(url string) *Agent {
+func WithIssuer(url string, opts ...AgentOption) *Agent {
 	// this means that GetFile(internal_key.jwt) and such should call our issuer
 	//
 
@@ -111,5 +111,5 @@ func WithIssuer(url string) *Agent {
 		}
 
 		return buf.Bytes(), nil
-	})
+	}, opts...)
 }

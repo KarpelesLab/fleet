@@ -94,8 +94,8 @@ func New(opts ...AgentOption) *Agent {
 }
 
 // return a new agent using the provided GetFile method
-func WithGetFile(f GetFileFunc) *Agent {
-	return New(f)
+func WithGetFile(f GetFileFunc, opts ...AgentOption) *Agent {
+	return New(append([]AgentOption{f}, opts...)...)
 }
 
 func spawn() *Agent {
