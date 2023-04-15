@@ -596,10 +596,13 @@ func (a *Agent) handleRpcResponse(pkt *PacketRpcResponse) error {
 	}
 }
 
-func (a *Agent) dialPeer(host, name string, id string) {
+func (a *Agent) dialPeer(host string, port int, name string, id string) {
 	if id == a.id {
 		// avoid connect to self
 		return
+	}
+	if port == 0 {
+		port = a.port
 	}
 
 	// random delay before connect
@@ -614,7 +617,7 @@ func (a *Agent) dialPeer(host, name string, id string) {
 	cfg.ServerName = id
 	cfg.NextProtos = []string{"fbin"}
 
-	c, err := tls.Dial("tcp", host+":"+strconv.FormatInt(int64(a.port), 10), cfg)
+	c, err := tls.Dial("tcp", host+":"+strconv.FormatInt(int64(port), 10), cfg)
 	if err != nil {
 		log.Printf("[fleet] failed to connect to peer %s(%s): %s", name, id, err)
 		return

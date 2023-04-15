@@ -30,6 +30,7 @@ type directoryPeer struct {
 	Version  string // "20211010151149/8fed26f"
 	Location string
 	IP       string
+	Port     int
 	Private  *directoryPrivate
 }
 
@@ -157,6 +158,7 @@ func (a *Agent) jwtPingDirectory(dir string, jwt []byte, client *http.Client) er
 		"Location": a.division,
 		"Version":  goupd.DATE_TAG + "/" + goupd.GIT_TAG,
 		"Time":     time.Now().UnixMicro(), // in ms
+		"Port":     a.port,
 		"Private": &directoryPrivate{
 			Id:       a.id,
 			Division: a.division,
@@ -206,7 +208,7 @@ func (a *Agent) jwtPingDirectory(dir string, jwt []byte, client *http.Client) er
 		if a.IsConnected(peer.Private.Id) {
 			continue
 		}
-		go a.dialPeer(peer.IP, peer.Name, peer.Private.Id)
+		go a.dialPeer(peer.IP, peer.Port, peer.Name, peer.Private.Id)
 	}
 
 	return nil

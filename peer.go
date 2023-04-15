@@ -120,7 +120,7 @@ func (a *Agent) handleFleetConn(tc *tls.Conn) {
 
 func (p *Peer) retryLater(t time.Duration) {
 	time.Sleep(t)
-	p.a.dialPeer(p.addr.IP.String(), p.name, p.id)
+	p.a.dialPeer(p.addr.IP.String(), p.addr.Port, p.name, p.id)
 }
 
 func (p *Peer) loop() {
