@@ -13,7 +13,6 @@ import (
 	"io"
 	"io/fs"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"time"
@@ -85,7 +84,7 @@ func WithIssuer(url string, opts ...AgentOption) *Agent {
 			return nil, fmt.Errorf("while signing request: %w", err)
 		}
 
-		log.Printf("POST to issuer %s: %s", url, bodyBin)
+		//log.Printf("POST to issuer %s: %s", url, bodyBin)
 
 		// Pass "sig" in header
 		req, err := http.NewRequest("POST", url, bytes.NewReader(bodyBin))
