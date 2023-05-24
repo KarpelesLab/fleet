@@ -255,7 +255,7 @@ func (p *Peer) handlePacket(pktI Packet) error {
 		}
 		p.name = pkt.Name
 		p.division = pkt.Division
-		goupd.SignalVersion(pkt.Git, pkt.Build)
+		goupd.SignalVersionChannel(pkt.Git, pkt.Build, pkt.Channel)
 		// TODO calculate offset
 		return nil
 	case *PacketSeed:
@@ -519,6 +519,7 @@ func (p *Peer) sendHandshake(ctx context.Context) error {
 		Now:      time.Now(),
 		Git:      goupd.GIT_TAG,
 		Build:    goupd.DATE_TAG,
+		Channel:  goupd.CHANNEL,
 	}
 	err := p.Send(ctx, pkt)
 	if err != nil {

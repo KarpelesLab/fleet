@@ -26,8 +26,9 @@ type PacketHandshake struct {
 	Division string
 	Now      time.Time
 
-	Git   string
-	Build string
+	Git     string
+	Build   string
+	Channel string
 }
 
 type PacketAnnounce struct {

@@ -156,7 +156,7 @@ func (a *Agent) jwtPingDirectory(dir string, jwt []byte, client *http.Client) er
 	post := map[string]interface{}{
 		"Name":     a.name,
 		"Location": a.division,
-		"Version":  goupd.DATE_TAG + "/" + goupd.GIT_TAG,
+		"Version":  goupd.CHANNEL + "/" + goupd.DATE_TAG + "/" + goupd.GIT_TAG,
 		"Time":     time.Now().UnixMicro(), // in ms
 		"Port":     a.port,
 		"Private": &directoryPrivate{
