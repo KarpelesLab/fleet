@@ -10,6 +10,10 @@ import (
 
 var channelUpdateLock sync.Mutex
 
+// SwitchChannel will signal the whole fleet to switch to the given channel for
+// the currently running software. This can be used to switch between stable
+// and beta versions and the like. Attempting to switch to a non-existing
+// channel will trigger errors across the fleet.
 func (a *Agent) SwitchChannel(channel string) error {
 	// let's switch the running channel of the whole fleet
 	return a.feedDbSetBC([]byte("global"), []byte("channel"), []byte(channel), DbNow())

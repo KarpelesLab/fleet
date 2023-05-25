@@ -58,7 +58,7 @@ func (a *Agent) DbWatch(key string, cb func(string, []byte)) {
 	a.dbWatchLock.Lock()
 	defer a.dbWatchLock.Unlock()
 
-	a.dbWatch[key] = cb
+	a.dbWatch[key] = append(a.dbWatch[key], cb)
 }
 
 func (a *Agent) getWatchTriggerCallback(keys ...string) (res []DbWatchCallback) {
@@ -67,7 +67,7 @@ func (a *Agent) getWatchTriggerCallback(keys ...string) (res []DbWatchCallback) 
 
 	for _, k := range keys {
 		if cb, ok := a.dbWatch[k]; ok {
-			res = append(res, cb)
+			res = append(res, cb...)
 		}
 	}
 	return

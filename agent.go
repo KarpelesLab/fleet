@@ -61,7 +61,7 @@ type Agent struct {
 
 	// DB
 	db          *bolt.DB
-	dbWatch     map[string]DbWatchCallback
+	dbWatch     map[string][]DbWatchCallback
 	dbWatchLock sync.RWMutex
 
 	// Meta-info
@@ -111,7 +111,7 @@ func spawn() *Agent {
 		peers:       make(map[string]*Peer),
 		services:    make(map[string]chan net.Conn),
 		rpc:         make(map[uintptr]chan *PacketRpcResponse),
-		dbWatch:     make(map[string]DbWatchCallback),
+		dbWatch:     make(map[string][]DbWatchCallback),
 		globalLocks: make(map[string]*globalLock),
 	}
 	a.pubCert = &crtCache{a: a, k: "public_key"}
