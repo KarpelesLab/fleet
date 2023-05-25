@@ -18,7 +18,7 @@ func init() {
 	gob.Register(&PacketDbRequest{})
 }
 
-type Packet interface{}
+type Packet any
 
 type PacketHandshake struct {
 	Id       string
@@ -37,7 +37,7 @@ type PacketAnnounce struct {
 	Idx  uint64
 	NumG uint32 // number of goroutines
 	AZ   string
-	Meta map[string]interface{}
+	Meta map[string]any
 }
 
 type PacketSeed struct {
@@ -50,14 +50,14 @@ type PacketRpc struct {
 	SourceId string
 	Endpoint string
 	R        uintptr
-	Data     interface{}
+	Data     any
 }
 
 type PacketRpcResponse struct {
 	TargetId string
 	SourceId string
 	R        uintptr
-	Data     interface{}
+	Data     any
 	Error    string
 	HasError bool
 }

@@ -6,7 +6,7 @@ import (
 	"log"
 )
 
-type RpcEndpoint func(interface{}) (interface{}, error)
+type RpcEndpoint func(any) (any, error)
 
 var (
 	rpcE = make(map[string]RpcEndpoint)
@@ -17,7 +17,7 @@ func SetRpcEndpoint(e string, f RpcEndpoint) {
 }
 
 // CallRpcEndpoint will call the named RPC endpoint on the local machine
-func CallRpcEndpoint(e string, p interface{}) (res interface{}, err error) {
+func CallRpcEndpoint(e string, p any) (res any, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("[fleet] Panic in RPC %s: %s", e, r)

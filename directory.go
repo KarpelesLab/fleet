@@ -153,7 +153,7 @@ func (a *Agent) jwtPingDirectory(dir string, jwt []byte, client *http.Client) er
 	}
 
 	// post body
-	post := map[string]interface{}{
+	post := map[string]any{
 		"Name":     a.name,
 		"Location": a.division,
 		"Version":  goupd.CHANNEL + "/" + goupd.DATE_TAG + "/" + goupd.GIT_TAG,

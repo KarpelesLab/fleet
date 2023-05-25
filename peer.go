@@ -45,7 +45,7 @@ type Peer struct {
 
 	alive chan struct{}
 
-	meta   map[string]interface{}
+	meta   map[string]any
 	metaLk sync.Mutex
 }
 
@@ -530,14 +530,14 @@ func (p *Peer) sendHandshake(ctx context.Context) error {
 	return p.Send(ctx, p.a.seedPacket())
 }
 
-func (p *Peer) Meta() map[string]interface{} {
+func (p *Peer) Meta() map[string]any {
 	p.metaLk.Lock()
 	defer p.metaLk.Unlock()
 
 	return p.meta
 }
 
-func (p *Peer) setMeta(v map[string]interface{}) {
+func (p *Peer) setMeta(v map[string]any) {
 	p.metaLk.Lock()
 	defer p.metaLk.Unlock()
 

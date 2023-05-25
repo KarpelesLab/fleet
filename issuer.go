@@ -57,7 +57,7 @@ func WithIssuer(url string, opts ...AgentOption) *Agent {
 		// fetch our local hostname to be included in request (just informative)
 		hn, _ := os.Hostname()
 
-		body := map[string]interface{}{
+		body := map[string]any{
 			"ts":    time.Now().UnixMicro(),
 			"file":  f,
 			"key":   base64.RawURLEncoding.EncodeToString(pubBin),

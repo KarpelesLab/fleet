@@ -65,7 +65,7 @@ type Agent struct {
 	dbWatchLock sync.RWMutex
 
 	// Meta-info
-	meta   map[string]interface{}
+	meta   map[string]any
 	metaLk sync.RWMutex
 
 	// getfile callback
@@ -214,7 +214,7 @@ func (a *Agent) Name() (string, string) {
 	return a.name, a.hostname
 }
 
-func (a *Agent) BroadcastRpc(ctx context.Context, endpoint string, data interface{}) error {
+func (a *Agent) BroadcastRpc(ctx context.Context, endpoint string, data any) error {
 	// send request
 	pkt := &PacketRpc{
 		SourceId: a.id,
@@ -299,7 +299,7 @@ type rpcChoiceStruct struct {
 	peer     *Peer
 }
 
-func (a *Agent) AnyRpc(ctx context.Context, division string, endpoint string, data interface{}) error {
+func (a *Agent) AnyRpc(ctx context.Context, division string, endpoint string, data any) error {
 	// send request
 	pkt := &PacketRpc{
 		SourceId: a.id,
@@ -340,7 +340,7 @@ func (a *Agent) AnyRpc(ctx context.Context, division string, endpoint string, da
 	return errors.New("no peer available")
 }
 
-func (a *Agent) DivisionRpc(ctx context.Context, division int, endpoint string, data interface{}) error {
+func (a *Agent) DivisionRpc(ctx context.Context, division int, endpoint string, data any) error {
 	divMatch := a.division
 	if division > 0 {
 		// only keep the N first parts of divison. Eg if N=2 and "divMatch" is "a/b/c", divMatch should become "a/b/"
@@ -385,7 +385,7 @@ func (a *Agent) DivisionRpc(ctx context.Context, division int, endpoint string, 
 	return a.DivisionPrefixRpc(ctx, divMatch, endpoint, data)
 }
 
-func (a *Agent) DivisionPrefixRpc(ctx context.Context, divMatch string, endpoint string, data interface{}) error {
+func (a *Agent) DivisionPrefixRpc(ctx context.Context, divMatch string, endpoint string, data any) error {
 	// send request
 	pkt := &PacketRpc{
 		SourceId: a.id,
@@ -418,7 +418,7 @@ func (a *Agent) DivisionPrefixRpc(ctx context.Context, divMatch string, endpoint
 	return nil
 }
 
-func (a *Agent) AllRPC(ctx context.Context, endpoint string, data interface{}) ([]interface{}, error) {
+func (a *Agent) AllRPC(ctx context.Context, endpoint string, data any) ([]any, error) {
 	// call method on ALL hosts and collect responses
 
 	// put a timeout on context just in case
@@ -457,7 +457,7 @@ func (a *Agent) AllRPC(ctx context.Context, endpoint string, data interface{}) (
 	}
 
 	// collect responses
-	var final []interface{}
+	var final []any
 
 	for {
 		select {
@@ -500,7 +500,7 @@ func (a *Agent) broadcastRpcPacket(ctx context.Context, pkt *PacketRpc) (n int, 
 	return
 }
 
-func (a *Agent) RPC(ctx context.Context, id string, endpoint string, data interface{}) (interface{}, error) {
+func (a *Agent) RPC(ctx context.Context, id string, endpoint string, data any) (any, error) {
 	p := a.GetPeer(id)
 	if p == nil {
 		return nil, errors.New("Failed to find peer")
@@ -834,7 +834,7 @@ func (a *Agent) SendPacketTo(ctx context.Context, target string, pc uint16, data
 	return p.WritePacket(ctx, pc, data)
 }
 
-func (a *Agent) SendTo(ctx context.Context, target string, pkt interface{}) error {
+func (a *Agent) SendTo(ctx context.Context, target string, pkt any) error {
 	p := a.GetPeer(target) // TODO find best route instead of using GetPeer
 	if p == nil {
 		return ErrPeerNoRoute
@@ -843,18 +843,18 @@ func (a *Agent) SendTo(ctx context.Context, target string, pkt interface{}) erro
 	return p.Send(ctx, pkt)
 }
 
-func (a *Agent) MetaSet(key string, value interface{}) {
+func (a *Agent) MetaSet(key string, value any) {
 	a.metaLk.Lock()
 	defer a.metaLk.Unlock()
 
 	if a.meta == nil {
-		a.meta = make(map[string]interface{})
+		a.meta = make(map[string]any)
 	}
 
 	a.meta[key] = value
 }
 
-func (a *Agent) copyMeta() map[string]interface{} {
+func (a *Agent) copyMeta() map[string]any {
 	a.metaLk.RLock()
 	defer a.metaLk.RUnlock()
 
@@ -862,7 +862,7 @@ func (a *Agent) copyMeta() map[string]interface{} {
 		return nil
 	}
 
-	res := make(map[string]interface{})
+	res := make(map[string]any)
 
 	for k, v := range a.meta {
 		res[k] = v
