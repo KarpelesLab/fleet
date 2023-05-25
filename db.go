@@ -61,17 +61,29 @@ func (a *Agent) DbWatch(key string, cb func(string, []byte)) {
 	a.dbWatch[key] = cb
 }
 
-func (a *Agent) dbWatchTrigger(key string, val []byte) {
+func (a *Agent) getWatchTriggerCallback(keys ...string) (res []DbWatchCallback) {
 	a.dbWatchLock.RLock()
-	cb1, ok1 := a.dbWatch[key]
-	cb2, ok2 := a.dbWatch["*"]
-	a.dbWatchLock.RUnlock()
+	defer a.dbWatchLock.RUnlock()
 
-	if ok1 {
-		cb1(key, val)
+	for _, k := range keys {
+		if cb, ok := a.dbWatch[k]; ok {
+			res = append(res, cb)
+		}
 	}
-	if ok2 {
-		cb2(key, val)
+	return
+}
+
+func (a *Agent) dbWatchTrigger(bucket, key string, val []byte) {
+	switch bucket {
+	case "global":
+		switch key {
+		case "channel":
+			a.notifyChannelChange(string(val))
+		}
+	case "app":
+		for _, cb := range a.getWatchTriggerCallback(key, "*") {
+			cb(key, val)
+		}
 	}
 }
 
@@ -170,7 +182,7 @@ func (a *Agent) feedDbSet(bucket, key, val []byte, v DbStamp) error {
 
 		return b.Put(key, val)
 	})
-	go a.dbWatchTrigger(string(key), val)
+	go a.dbWatchTrigger(string(bucket), string(key), val)
 	return err
 }
 

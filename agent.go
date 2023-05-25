@@ -127,6 +127,7 @@ func (a *Agent) start() {
 	a.initDb()
 	a.initSeed()
 	a.directoryThread()
+	a.channelSet()
 
 	// only setSelf() after everything has been started so we know Self() returns a ready instance
 	setSelf(a)
