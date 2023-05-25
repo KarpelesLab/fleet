@@ -1,6 +1,7 @@
 package fleet
 
 import (
+	"crypto"
 	"crypto/tls"
 	"log"
 	"sync"
@@ -44,6 +45,37 @@ func (c *crtCache) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error
 	}
 
 	return c.crt, c.err
+}
+
+func (c *crtCache) PrivateKey() (crypto.PrivateKey, error) {
+	if time.Since(c.t) < time.Hour*24 {
+		if c.err != nil {
+			return nil, c.err
+		}
+		return c.crt.PrivateKey, nil
+	}
+
+	c.lk.Lock()
+	defer c.lk.Unlock()
+
+	if time.Since(c.t) < time.Hour*24 {
+		if c.err != nil {
+			return nil, c.err
+		}
+		return c.crt.PrivateKey, nil
+	}
+
+	c.t = time.Now()
+
+	c.crt, c.err = c.loadCert()
+	if c.err != nil {
+		log.Printf("[tls] Failed to fetch %s certificate: %s", c.k, c.err)
+	}
+
+	if c.err != nil {
+		return nil, c.err
+	}
+	return c.crt.PrivateKey, nil
 }
 
 func (c *crtCache) loadCert() (*tls.Certificate, error) {

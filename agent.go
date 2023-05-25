@@ -172,7 +172,7 @@ func (a *Agent) doInit(token *jwt.Token) (err error) {
 	a.inCfg.RootCAs = a.ca
 	a.outCfg.RootCAs = a.ca
 
-	a.inCfg.NextProtos = []string{"fbin", "p2p"}
+	a.inCfg.NextProtos = []string{"fbin", "fssh", "p2p"}
 
 	// configure client auth
 	a.inCfg.ClientAuth = tls.RequireAndVerifyClientCert
@@ -616,7 +616,7 @@ func (a *Agent) dialPeer(host string, port int, name string, id string) {
 
 	cfg := a.outCfg.Clone()
 	cfg.ServerName = id
-	cfg.NextProtos = []string{"fbin"}
+	cfg.NextProtos = []string{"fbin", "fssh"}
 
 	c, err := tls.Dial("tcp", host+":"+strconv.FormatInt(int64(port), 10), cfg)
 	if err != nil {
@@ -624,7 +624,7 @@ func (a *Agent) dialPeer(host string, port int, name string, id string) {
 		return
 	}
 
-	go a.newConn(c)
+	go a.newConn(c, false)
 }
 
 func (a *Agent) IsConnected(id string) bool {
@@ -646,7 +646,7 @@ func (a *Agent) listenLoop() {
 			return
 		}
 
-		go a.newConn(conn)
+		go a.newConn(conn, true)
 	}
 }
 

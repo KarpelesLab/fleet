@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/KarpelesLab/goupd"
+	"golang.org/x/crypto/ssh"
 )
 
 type Peer struct {
@@ -28,6 +29,7 @@ type Peer struct {
 	division  string
 	addr      *net.TCPAddr
 	valid     bool
+	ssh       ssh.Conn
 
 	annIdx    uint64
 	numG      uint32
@@ -49,7 +51,7 @@ type Peer struct {
 	metaLk sync.Mutex
 }
 
-func (a *Agent) newConn(c net.Conn) {
+func (a *Agent) newConn(c net.Conn, incoming bool) {
 	tc, ok := c.(*tls.Conn)
 	if !ok {
 		log.Printf("[fleet] non-tls connection recieved?")
@@ -69,6 +71,8 @@ func (a *Agent) newConn(c net.Conn) {
 	case "fbin":
 		a.handleFleetConn(tc)
 		return
+	case "fssh":
+		a.handleFleetSsh(tc, incoming)
 	case "p2p":
 		a.handleServiceConn(tc)
 		return
@@ -81,7 +85,7 @@ func (a *Agent) newConn(c net.Conn) {
 // TlsProtocols returns a list of TLS protocols managed by the fleet system
 // that should be directed to the fleet agent listener
 func TlsProtocols() []string {
-	return []string{"fbin", "p2p"}
+	return []string{"fbin", "fssh", "p2p"}
 }
 
 func (a *Agent) handleFleetConn(tc *tls.Conn) {
@@ -116,6 +120,121 @@ func (a *Agent) handleFleetConn(tc *tls.Conn) {
 	go p.loop()
 	go p.writeLoop()
 	go p.monitor()
+}
+
+func (a *Agent) handleFleetSsh(tc *tls.Conn, incoming bool) {
+	// instanciate peer and fetch certificate
+	p := &Peer{
+		a:         a,
+		cnx:       time.Now(),
+		addr:      tc.RemoteAddr().(*net.TCPAddr),
+		alive:     make(chan struct{}),
+		aliveTime: time.Now(),
+		annTime:   time.Now(),
+		valid:     true,
+	}
+	err := p.fetchUuidFromCertificate()
+	if err != nil {
+		log.Printf("[fleet] failed to get peer id: %s", err)
+		p.c.Close()
+		return
+	}
+	if p.id == a.id {
+		log.Printf("[fleet] connected to self, closing")
+		p.c.Close()
+		return
+	}
+
+	var chans <-chan ssh.NewChannel
+	var reqs <-chan *ssh.Request
+
+	if incoming {
+		// we are server
+		// NewServerConn(c net.Conn, config *ServerConfig) (*ServerConn, <-chan NewChannel, <-chan *Request, error)
+		cfg := &ssh.ServerConfig{
+			NoClientAuth:  true, // already authenticated
+			ServerVersion: "fleet",
+		}
+		if k, err := a.intCert.PrivateKey(); err == nil {
+			if s, ok := k.(ssh.Signer); ok {
+				cfg.AddHostKey(s)
+			}
+		}
+		p.ssh, chans, reqs, err = ssh.NewServerConn(tc, cfg)
+	} else {
+		// we are client
+		cfg := &ssh.ClientConfig{
+			User:            "none",
+			Auth:            []ssh.AuthMethod{},          // auth method = none
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO compare with ssl key?
+			//BannerCallback:
+			//ClientVersion:
+		}
+		p.ssh, chans, reqs, err = ssh.NewClientConn(tc, p.id, cfg)
+	}
+	if err != nil {
+		log.Printf("[fleet] SSH connection failed: %s", err)
+		tc.Close()
+		return
+	}
+
+	log.Printf("[fleet] SSH connection with peer %s(%s) established", p.name, p.id)
+
+	go p.handleSshRequests(reqs)
+	go p.handleSshChans(chans)
+
+	go p.sendHandshake(context.Background()) // will disappear
+	go p.register()
+
+	// TODO is needed?
+	go p.monitor()
+}
+
+func (p *Peer) handleSshRequests(reqs <-chan *ssh.Request) {
+	defer p.unregister()
+	defer p.ssh.Close()
+
+	for req := range reqs {
+		switch req.Type {
+		case "fbin":
+			// payload is 2 bytes packet code followed by binary data
+			// this is considered legacy but kept for compatibility
+			buf := req.Payload
+			if len(buf) < 2 {
+				if req.WantReply {
+					req.Reply(false, nil)
+				}
+				break
+			}
+			pc := binary.BigEndian.Uint16(buf[:2])
+			err := p.handleBinary(pc, buf[2:])
+			if req.WantReply {
+				if err != nil {
+					req.Reply(false, []byte(err.Error()))
+				} else {
+					req.Reply(true, nil)
+				}
+			}
+		default:
+			if req.WantReply {
+				// reject
+				req.Reply(false, nil)
+			}
+		}
+	}
+}
+
+func (p *Peer) handleSshChans(chans <-chan ssh.NewChannel) {
+	defer p.unregister()
+	defer p.ssh.Close()
+
+	for ch := range chans {
+		switch ch.ChannelType() {
+		default:
+			log.Printf("[fleet] rejecting channel request for %s", ch.ChannelType())
+			ch.Reject(ssh.UnknownChannelType, "unknown channel type")
+		}
+	}
 }
 
 func (p *Peer) retryLater(t time.Duration) {
@@ -457,6 +576,13 @@ func (p *Peer) writev(ctx context.Context, buf ...[]byte) (n int, err error) {
 }
 
 func (p *Peer) WritePacket(ctx context.Context, pc uint16, data []byte) error {
+	if p.ssh != nil {
+		// send as fbin request
+		pcBin := []byte{byte(pc >> 8), byte(pc)}
+		_, _, err := p.ssh.SendRequest("fbin", false, append(pcBin, data...))
+		return err
+	}
+
 	pcBin := []byte{byte(pc >> 8), byte(pc)}
 	ln := len(data)
 	lnBin := []byte{
@@ -471,6 +597,10 @@ func (p *Peer) WritePacket(ctx context.Context, pc uint16, data []byte) error {
 
 func (p *Peer) Close(reason string) error {
 	log.Printf("[fleet] Closing connection to %s(%s): %s", p.name, p.id, reason)
+	if p.ssh != nil {
+		return p.ssh.Close()
+	}
+
 	p.c.SetWriteDeadline(time.Now().Add(1 * time.Second))
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
