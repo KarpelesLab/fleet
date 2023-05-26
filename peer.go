@@ -87,7 +87,7 @@ func (a *Agent) newConn(c net.Conn, incoming bool) {
 // TlsProtocols returns a list of TLS protocols managed by the fleet system
 // that should be directed to the fleet agent listener
 func TlsProtocols() []string {
-	return []string{"fbin", "fssh", "p2p"}
+	return []string{"fssh", "fbin", "p2p"}
 }
 
 func (a *Agent) handleFleetConn(tc *tls.Conn) {
