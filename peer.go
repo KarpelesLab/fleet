@@ -100,7 +100,7 @@ func (a *Agent) handleFleetConn(tc *tls.Conn) {
 		annTime:   time.Now(),
 		valid:     true,
 	}
-	err := p.fetchUuidFromCertificate()
+	err := p.fetchUuidFromCertificate(tc)
 	if err != nil {
 		log.Printf("[fleet] failed to get peer id: %s", err)
 		p.c.Close()
@@ -133,15 +133,15 @@ func (a *Agent) handleFleetSsh(tc *tls.Conn, incoming bool) {
 		annTime:   time.Now(),
 		valid:     true,
 	}
-	err := p.fetchUuidFromCertificate()
+	err := p.fetchUuidFromCertificate(tc)
 	if err != nil {
 		log.Printf("[fleet] failed to get peer id: %s", err)
-		p.c.Close()
+		tc.Close()
 		return
 	}
 	if p.id == a.id {
 		log.Printf("[fleet] connected to self, closing")
-		p.c.Close()
+		tc.Close()
 		return
 	}
 
@@ -475,9 +475,9 @@ func (p *Peer) handleDbRequest(pkt *PacketDbRequest) error {
 	return p.Send(context.Background(), res)
 }
 
-func (p *Peer) fetchUuidFromCertificate() error {
+func (p *Peer) fetchUuidFromCertificate(tc *tls.Conn) error {
 	// grab certificate
-	chains := p.c.ConnectionState().VerifiedChains
+	chains := tc.ConnectionState().VerifiedChains
 	if len(chains) == 0 {
 		return errors.New("no peer certificate?")
 	}
