@@ -381,7 +381,8 @@ func (p *Peer) handleLegacy(data []byte) error {
 
 	err := dec.Decode(&pkt)
 	if err != nil {
-		return err
+		log.Printf("notice: failed to decode gob: %s", err)
+		return nil
 	}
 	return p.handlePacket(pkt)
 }
