@@ -160,9 +160,13 @@ func (a *Agent) handleFleetSsh(tc *tls.Conn, incoming bool) {
 			ServerVersion: "fleet",
 		}
 		if k, err := a.intCert.PrivateKey(); err == nil {
-			if s, ok := k.(ssh.Signer); ok {
+			if s, err := ssh.NewSignerFromKey(k); err == nil {
 				cfg.AddHostKey(s)
+			} else {
+				log.Printf("[fleet] SSH server signer failed: %s", err)
 			}
+		} else {
+			log.Printf("[fleet] failed to fetch host private key: %s", err)
 		}
 		p.ssh, chans, reqs, err = ssh.NewServerConn(tc, cfg)
 	} else {
