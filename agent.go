@@ -740,6 +740,7 @@ func (a *Agent) DumpInfo(w io.Writer) {
 		fmt.Fprintf(w, "Division: %s\n", p.division)
 		fmt.Fprintf(w, "Endpoint: %s\n", p.c.RemoteAddr())
 		fmt.Fprintf(w, "Connected:%s (%s ago)\n", p.cnx, time.Since(p.cnx))
+		fmt.Fprintf(w, "Protocol: %s\n", p.protocol)
 		fmt.Fprintf(w, "Last Ann: %s\n", time.Since(p.annTime))
 		fmt.Fprintf(w, "Latency:  %s\n", p.Ping)
 		fmt.Fprintf(w, "Offset:   %s\n", p.timeOfft)

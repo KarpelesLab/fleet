@@ -27,6 +27,7 @@ type Peer struct {
 	id        string
 	name      string
 	division  string
+	protocol  string
 	addr      *net.TCPAddr
 	valid     bool
 	ssh       ssh.Conn
@@ -73,6 +74,7 @@ func (a *Agent) newConn(c net.Conn, incoming bool) {
 		return
 	case "fssh":
 		a.handleFleetSsh(tc, incoming)
+		return
 	case "p2p":
 		a.handleServiceConn(tc)
 		return
@@ -94,6 +96,7 @@ func (a *Agent) handleFleetConn(tc *tls.Conn) {
 		c:         tc,
 		a:         a,
 		cnx:       time.Now(),
+		protocol:  "fbin",
 		addr:      tc.RemoteAddr().(*net.TCPAddr),
 		alive:     make(chan struct{}),
 		aliveTime: time.Now(),
@@ -127,6 +130,7 @@ func (a *Agent) handleFleetSsh(tc *tls.Conn, incoming bool) {
 	p := &Peer{
 		a:         a,
 		cnx:       time.Now(),
+		protocol:  "ssh",
 		addr:      tc.RemoteAddr().(*net.TCPAddr),
 		alive:     make(chan struct{}),
 		aliveTime: time.Now(),
