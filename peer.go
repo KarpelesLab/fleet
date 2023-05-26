@@ -370,6 +370,8 @@ func (p *Peer) handleBinary(pc uint16, data []byte) error {
 		if pc >= PacketCustom && pc <= PacketCustomMax {
 			// custom packet
 			return callCustomHandler(p, pc, data)
+		} else {
+			log.Printf("[fleet] unknown packet received 0x%04x", pc)
 		}
 	}
 	return nil
