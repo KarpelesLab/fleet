@@ -157,7 +157,7 @@ func (a *Agent) handleFleetSsh(tc *tls.Conn, incoming bool) {
 		// NewServerConn(c net.Conn, config *ServerConfig) (*ServerConn, <-chan NewChannel, <-chan *Request, error)
 		cfg := &ssh.ServerConfig{
 			NoClientAuth:  true, // already authenticated
-			ServerVersion: "fleet",
+			ServerVersion: "SSH-2.0-fssh",
 		}
 		if k, err := a.intCert.PrivateKey(); err == nil {
 			if s, err := ssh.NewSignerFromKey(k); err == nil {
