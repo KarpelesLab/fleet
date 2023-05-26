@@ -61,7 +61,7 @@ func (a *Agent) Connect(id string, service string) (net.Conn, error) {
 	}
 
 	if p.ssh != nil {
-		ch, reqs, err := p.ssh.OpenChannel("p2p", []byte(service))
+		ch, reqs, err := p.ssh.OpenChannel("p2p", []byte(service+"."+id))
 		if err != nil {
 			return nil, err
 		}

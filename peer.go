@@ -13,6 +13,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -239,7 +240,13 @@ func (p *Peer) handleSshChans(chans <-chan ssh.NewChannel) {
 	for ch := range chans {
 		switch ch.ChannelType() {
 		case "p2p":
-			svc := p.a.getService(string(ch.ExtraData()))
+			addrSplit := strings.Split(string(ch.ExtraData()), ".") // <service>.<id>
+			if len(addrSplit) != 2 {
+				ch.Reject(ssh.ConnectionFailed, "invalid service request, needs to be <service>.<id>")
+				break
+			}
+			// TODO check if addrSplit[1] is indeed us
+			svc := p.a.getService(addrSplit[0])
 			if svc == nil {
 				// no such service
 				ch.Reject(ssh.ConnectionFailed, "no such service")
