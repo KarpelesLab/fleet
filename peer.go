@@ -194,8 +194,8 @@ func (a *Agent) handleFleetSsh(tc *tls.Conn, incoming bool) {
 	go p.sendHandshake(context.Background()) // will disappear
 	go p.register()
 
-	// TODO is needed?
 	go p.monitor()
+	go p.writeLoop()
 }
 
 func (p *Peer) handleSshRequests(reqs <-chan *ssh.Request) {
@@ -545,7 +545,11 @@ func (p *Peer) Send(ctx context.Context, pkt Packet) error {
 }
 
 func (p *Peer) writeLoop() {
-	defer p.c.Close()
+	if p.ssh != nil {
+		defer p.ssh.Close()
+	} else {
+		defer p.c.Close()
+	}
 	t := time.NewTicker(5 * time.Second)
 
 	for {
