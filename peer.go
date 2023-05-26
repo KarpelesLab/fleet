@@ -349,6 +349,16 @@ func (p *Peer) handleBinary(pc uint16, data []byte) error {
 	case PacketClose:
 		log.Printf("[fleet] Closing peer connection because: %s", data)
 		return io.EOF
+	case PacketSeed:
+		if len(data) < 16 {
+			return fmt.Errorf("PacketSeed too short")
+		}
+		var t DbStamp
+		err := t.UnmarshalBinary(data[:16])
+		if err != nil {
+			return err
+		}
+		return p.a.handleNewSeed(data[16:], time.Time(t))
 	default:
 		if pc >= PacketCustom && pc <= PacketCustomMax {
 			// custom packet
@@ -398,8 +408,6 @@ func (p *Peer) handlePacket(pktI Packet) error {
 		goupd.SignalVersionChannel(pkt.Git, pkt.Build, pkt.Channel)
 		// TODO calculate offset
 		return nil
-	case *PacketSeed:
-		return p.a.handleNewSeed(pkt.Seed, pkt.Time)
 	case *PacketAnnounce:
 		return p.a.handleAnnounce(pkt, p)
 	case *PacketRpc:
@@ -682,7 +690,7 @@ func (p *Peer) sendHandshake(ctx context.Context) error {
 	}
 	p.WritePacket(ctx, PacketPing, DbStamp(time.Now()).Bytes())
 	p.Send(ctx, p.a.databasePacket())
-	return p.Send(ctx, p.a.seedPacket())
+	return p.WritePacket(ctx, PacketSeed, p.a.seedData())
 }
 
 func (p *Peer) Meta() map[string]any {

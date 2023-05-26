@@ -12,6 +12,7 @@ const (
 	PacketLockRes     = 0x3002 // response (aye or nay)
 	PacketLockConfirm = 0x1003 // lock is confirmed (or re-confirmed) → status = 1
 	PacketLockRelease = 0x1004 // lock is released
+	PacketSeed        = 0x1005 // seed data
 	PacketClose       = 0x1fff
 
 	PacketCustom    = 0xa000 // 0xa000 ~ 0xafff are custom channels

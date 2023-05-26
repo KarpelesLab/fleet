@@ -8,7 +8,6 @@ import (
 func init() {
 	gob.Register(&PacketHandshake{})
 	gob.Register(&PacketAnnounce{})
-	gob.Register(&PacketSeed{})
 	gob.Register(&PacketRpc{})
 	gob.Register(&PacketRpcResponse{})
 	gob.Register(&PacketDbRecord{})
@@ -38,11 +37,6 @@ type PacketAnnounce struct {
 	NumG uint32 // number of goroutines
 	AZ   string
 	Meta map[string]any
-}
-
-type PacketSeed struct {
-	Seed []byte
-	Time time.Time
 }
 
 type PacketRpc struct {

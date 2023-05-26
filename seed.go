@@ -179,11 +179,9 @@ func (a *Agent) SeedDecrypt(in []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-func (a *Agent) seedPacket() *PacketSeed {
-	return &PacketSeed{
-		Seed: a.seed.seed,
-		Time: a.seed.ts,
-	}
+func (a *Agent) seedData() []byte {
+	ts := DbStamp(a.seed.ts).Bytes()
+	return append(ts, a.seed.seed...)
 }
 
 func (a *Agent) handleNewSeed(s []byte, t time.Time) error {
