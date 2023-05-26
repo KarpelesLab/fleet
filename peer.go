@@ -701,3 +701,10 @@ func (p *Peer) String() string {
 	}
 	return p.id
 }
+
+func (p *Peer) RemoteAddr() net.Addr {
+	if p.ssh != nil {
+		return p.ssh.RemoteAddr()
+	}
+	return p.c.RemoteAddr()
+}
