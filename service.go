@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"golang.org/x/crypto/ssh"
 )
 
 // embed connection in a separate object to avoid confusing go's HTTP server (among other stuff)
@@ -56,6 +58,15 @@ func (a *Agent) Connect(id string, service string) (net.Conn, error) {
 	p := a.GetPeer(id)
 	if p == nil {
 		return nil, errors.New("no route to peer")
+	}
+
+	if p.ssh != nil {
+		ch, reqs, err := p.ssh.OpenChannel("p2p", []byte(service))
+		if err != nil {
+			return nil, err
+		}
+		go ssh.DiscardRequests(reqs)
+		return &quasiConn{Channel: ch, p: p}, nil
 	}
 
 	service_b := []byte(service)
@@ -163,4 +174,16 @@ func (a *Agent) forwardConnection(service string, c net.Conn) {
 	}
 
 	ch <- &ServiceConn{Conn: c}
+}
+
+func (a *Agent) getService(service string) chan net.Conn {
+	a.svcMutex.RLock()
+	defer a.svcMutex.RUnlock()
+
+	ch, ok := a.services[service]
+	if !ok {
+		return nil
+	}
+
+	return ch
 }

@@ -230,6 +230,19 @@ func (p *Peer) handleSshChans(chans <-chan ssh.NewChannel) {
 
 	for ch := range chans {
 		switch ch.ChannelType() {
+		case "p2p":
+			svc := p.a.getService(string(ch.ExtraData()))
+			if svc == nil {
+				// no such service
+				ch.Reject(ssh.ConnectionFailed, "no such service")
+				break
+			}
+			nch, reqs, err := ch.Accept()
+			if err != nil {
+				log.Printf("[fleet] channel accept failed: %s", err)
+			}
+			go ssh.DiscardRequests(reqs)
+			svc <- &quasiConn{Channel: nch, p: p}
 		default:
 			log.Printf("[fleet] rejecting channel request for %s", ch.ChannelType())
 			ch.Reject(ssh.UnknownChannelType, "unknown channel type")
