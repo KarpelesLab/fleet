@@ -25,7 +25,7 @@ type RPC interface {
 	Send(ctx context.Context, id string, data any) (any, error)
 
 	// Self will return the id of the local peer, can be used for other instances
-	// to contact here with Send()
+	// to contact here with Send().
 	Self() string
 
 	// Connect connects this RPC instance incoming events to a given function
