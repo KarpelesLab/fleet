@@ -24,7 +24,8 @@ const (
 
 // Custom returns a packet id for a given custom packet
 // Typically you will define your custom packet as follow:
-//     var MyCustomPacket = fleet.Custom(0)
+//
+//	var MyCustomPacket = fleet.Custom(0)
 func Custom(v uint16) uint16 {
 	if v > (PacketCustomMax - PacketCustom) {
 		panic("value too high for custom packet")
