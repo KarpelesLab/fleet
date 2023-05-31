@@ -83,7 +83,7 @@ func (i *rpcInstance) Send(ctx context.Context, id string, data any) (any, error
 }
 
 func (i *rpcInstance) Self() string {
-	return i.a.id
+	return i.a.Id()
 }
 
 func (i *rpcInstance) Connect(cb func(context.Context, any) (any, error)) {
