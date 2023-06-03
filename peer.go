@@ -225,10 +225,18 @@ func (p *Peer) handleSshRequests(reqs <-chan *ssh.Request) {
 				}
 			}
 		default:
-			if req.WantReply {
-				// reject
-				req.Reply(false, nil)
+			// rpc binreq?
+			if endpoint, ok := strings.CutPrefix(req.Type, "rpc/"); ok {
+				data, err := CallRpcEndpoint(endpoint, req.Payload)
+				if err != nil {
+					req.Reply(false, []byte(err.Error()))
+				} else {
+					req.Reply(true, data.([]byte))
+				}
+				return
 			}
+			// unsupported
+			req.Reply(false, nil)
 		}
 	}
 }

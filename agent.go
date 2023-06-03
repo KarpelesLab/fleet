@@ -477,6 +477,61 @@ func (a *Agent) AllRPC(ctx context.Context, endpoint string, data any) ([]any, e
 	}
 }
 
+func (a *Agent) AllRpcBin(ctx context.Context, endpoint string, data []byte) ([]any, error) {
+	// call method on ALL hosts and collect responses
+
+	// put a timeout on context just in case
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// build response pipe
+	res := make(chan any)
+
+	// send request
+	a.peersMutex.RLock()
+	defer a.peersMutex.RUnlock()
+
+	n := 0
+	for _, p := range a.peers {
+		if p.id == a.id {
+			continue
+		}
+		n += 1
+		go func(p *Peer) {
+			ok, buf, err := p.ssh.SendRequest("rpc/"+endpoint, true, data)
+			var snd any
+			if err != nil {
+				snd = err
+			} else if !ok {
+				snd = errors.New(string(data))
+			} else {
+				snd = buf
+			}
+			if err == nil && ok {
+				select {
+				case res <- snd:
+				case <-ctx.Done():
+				}
+			}
+		}(p)
+	}
+
+	// collect responses
+	var final []any
+
+	for {
+		select {
+		case v := <-res:
+			final = append(final, v)
+			if len(final) == n {
+				return final, nil
+			}
+		case <-ctx.Done():
+			return final, ctx.Err()
+		}
+	}
+}
+
 func (a *Agent) broadcastRpcPacket(ctx context.Context, pkt *PacketRpc) (n int, err error) {
 	a.peersMutex.RLock()
 	defer a.peersMutex.RUnlock()
@@ -499,6 +554,55 @@ func (a *Agent) broadcastRpcPacket(ctx context.Context, pkt *PacketRpc) (n int, 
 	}
 
 	return
+}
+
+func (a *Agent) BroadcastRpcBin(ctx context.Context, endpoint string, pkt []byte) (n int, err error) {
+	a.peersMutex.RLock()
+	defer a.peersMutex.RUnlock()
+
+	if len(a.peers) == 0 {
+		return
+	}
+
+	var wg sync.WaitGroup
+
+	for _, p := range a.peers {
+		if p.id == a.id {
+			// do not send to self
+			continue
+		}
+		n += 1
+		wg.Add(1)
+		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
+		go func() {
+			defer wg.Done()
+			p.ssh.SendRequest("rpc/"+endpoint, false, pkt)
+		}()
+	}
+
+	// wait for all sends to end to make sure pkt can be re-used
+	wg.Wait()
+
+	return
+}
+
+func (a *Agent) RpcBin(ctx context.Context, id string, endpoint string, data []byte) ([]byte, error) {
+	// send data to given peer
+	p := a.GetPeer(id)
+	if p == nil {
+		return nil, errors.New("Failed to find peer")
+	}
+
+	res, data, err := p.ssh.SendRequest("rpc/"+endpoint, true, data)
+	if err != nil {
+		return data, err
+	}
+
+	if !res {
+		return nil, errors.New(string(data))
+	}
+
+	return data, nil
 }
 
 func (a *Agent) RPC(ctx context.Context, id string, endpoint string, data any) (any, error) {

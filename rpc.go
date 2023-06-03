@@ -16,13 +16,13 @@ var (
 type RPC interface {
 	// All will send a given data object to all other RPC instances on the fleet
 	// and will collect responses
-	All(ctx context.Context, data any) ([]any, error)
+	All(ctx context.Context, data []byte) ([]any, error)
 
 	// Broadcast will do the same as All but will not wait for responses
-	Broadcast(ctx context.Context, data any) error
+	Broadcast(ctx context.Context, data []byte) error
 
 	// Send will send a given object to a specific peer and return the response
-	Send(ctx context.Context, id string, data any) (any, error)
+	Send(ctx context.Context, id string, data []byte) ([]byte, error)
 
 	// Self will return the id of the local peer, can be used for other instances
 	// to contact here with Send().
@@ -30,13 +30,13 @@ type RPC interface {
 
 	// Connect connects this RPC instance incoming events to a given function
 	// that will be called each time an event is received.
-	Connect(cb func(context.Context, any) (any, error))
+	Connect(cb func(context.Context, []byte) ([]byte, error))
 }
 
 type rpcInstance struct {
 	a    *Agent
 	name string
-	cb   func(context.Context, any) (any, error)
+	cb   func(context.Context, []byte) ([]byte, error)
 }
 
 func SetRpcEndpoint(e string, f RpcEndpoint) {
@@ -70,29 +70,30 @@ func (a *Agent) NewRpcInstance(name string) (RPC, error) {
 	return i, nil
 }
 
-func (i *rpcInstance) All(ctx context.Context, data any) ([]any, error) {
-	return i.a.AllRPC(ctx, i.name, data)
+func (i *rpcInstance) All(ctx context.Context, data []byte) ([]any, error) {
+	return i.a.AllRpcBin(ctx, i.name, data)
 }
 
-func (i *rpcInstance) Broadcast(ctx context.Context, data any) error {
-	return i.a.BroadcastRpc(ctx, i.name, data)
+func (i *rpcInstance) Broadcast(ctx context.Context, data []byte) error {
+	_, err := i.a.BroadcastRpcBin(ctx, i.name, data)
+	return err
 }
 
-func (i *rpcInstance) Send(ctx context.Context, id string, data any) (any, error) {
-	return i.a.RPC(ctx, id, i.name, data)
+func (i *rpcInstance) Send(ctx context.Context, id string, data []byte) ([]byte, error) {
+	return i.a.RpcBin(ctx, id, i.name, data)
 }
 
 func (i *rpcInstance) Self() string {
 	return i.a.Id()
 }
 
-func (i *rpcInstance) Connect(cb func(context.Context, any) (any, error)) {
+func (i *rpcInstance) Connect(cb func(context.Context, []byte) ([]byte, error)) {
 	i.cb = cb
 }
 
 func (i *rpcInstance) call(v any) (any, error) {
 	if cb := i.cb; cb != nil {
-		return cb(context.Background(), v)
+		return cb(context.Background(), v.([]byte))
 	}
 	return nil, fs.ErrNotExist
 }
