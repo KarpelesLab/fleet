@@ -21,8 +21,11 @@ type RPC interface {
 	// Broadcast will do the same as All but will not wait for responses
 	Broadcast(ctx context.Context, data []byte) error
 
-	// Send will send a given object to a specific peer and return the response
-	Send(ctx context.Context, id string, data []byte) ([]byte, error)
+	// Request will send a given object to a specific peer and return the response
+	Request(ctx context.Context, id string, data []byte) ([]byte, error)
+
+	// SEnd will send a given object to a specific peer but ignore the response
+	Send(ctx context.Context, id string, data []byte) error
 
 	// Self will return the id of the local peer, can be used for other instances
 	// to contact here with Send().
@@ -79,8 +82,12 @@ func (i *rpcInstance) Broadcast(ctx context.Context, data []byte) error {
 	return err
 }
 
-func (i *rpcInstance) Send(ctx context.Context, id string, data []byte) ([]byte, error) {
+func (i *rpcInstance) Request(ctx context.Context, id string, data []byte) ([]byte, error) {
 	return i.a.RpcBin(ctx, id, i.name, data)
+}
+
+func (i *rpcInstance) Send(ctx context.Context, id string, data []byte) error {
+	return i.a.RpcSend(ctx, id, i.name, data)
 }
 
 func (i *rpcInstance) Self() string {

@@ -605,6 +605,18 @@ func (a *Agent) RpcBin(ctx context.Context, id string, endpoint string, data []b
 	return data, nil
 }
 
+// RpcSend sends a request but expects no response, failure will only reported if the request failed to be
+// sent, and failure on the other side will not be reported
+func (a *Agent) RpcSend(ctx context.Context, id string, endpoint string, data []byte) error {
+	p := a.GetPeer(id)
+	if p == nil {
+		return errors.New("Failed to find peer")
+	}
+
+	_, _, err := p.ssh.SendRequest("rpc/"+endpoint, false, data)
+	return err
+}
+
 func (a *Agent) RPC(ctx context.Context, id string, endpoint string, data any) (any, error) {
 	p := a.GetPeer(id)
 	if p == nil {
