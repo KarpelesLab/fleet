@@ -74,7 +74,7 @@ func (a *Agent) NewRpcInstance(name string) (RPC, error) {
 }
 
 func (i *rpcInstance) All(ctx context.Context, data []byte) ([]any, error) {
-	return i.a.AllRpcBin(ctx, i.name, data)
+	return i.a.AllRpcRequest(ctx, i.name, data)
 }
 
 func (i *rpcInstance) Broadcast(ctx context.Context, data []byte) error {
@@ -83,7 +83,7 @@ func (i *rpcInstance) Broadcast(ctx context.Context, data []byte) error {
 }
 
 func (i *rpcInstance) Request(ctx context.Context, id string, data []byte) ([]byte, error) {
-	return i.a.RpcBin(ctx, id, i.name, data)
+	return i.a.RpcRequest(ctx, id, i.name, data)
 }
 
 func (i *rpcInstance) Send(ctx context.Context, id string, data []byte) error {

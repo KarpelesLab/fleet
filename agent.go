@@ -477,7 +477,7 @@ func (a *Agent) AllRPC(ctx context.Context, endpoint string, data any) ([]any, e
 	}
 }
 
-func (a *Agent) AllRpcBin(ctx context.Context, endpoint string, data []byte) ([]any, error) {
+func (a *Agent) AllRpcRequest(ctx context.Context, endpoint string, data []byte) ([]any, error) {
 	// call method on ALL hosts and collect responses
 
 	// put a timeout on context just in case
@@ -586,7 +586,7 @@ func (a *Agent) BroadcastRpcBin(ctx context.Context, endpoint string, pkt []byte
 	return
 }
 
-func (a *Agent) RpcBin(ctx context.Context, id string, endpoint string, data []byte) ([]byte, error) {
+func (a *Agent) RpcRequest(ctx context.Context, id string, endpoint string, data []byte) ([]byte, error) {
 	// send data to given peer
 	p := a.GetPeer(id)
 	if p == nil {
