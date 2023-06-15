@@ -31,6 +31,12 @@ type RPC interface {
 	// to contact here with Send().
 	Self() string
 
+	// ListOnlinePeers returns a list of connected peers
+	ListOnlinePeers() []string
+
+	// CountAllPeers return the number of known connected or offline peers
+	CountAllPeers() int
+
 	// Connect connects this RPC instance incoming events to a given function
 	// that will be called each time an event is received.
 	Connect(cb func(context.Context, []byte) ([]byte, error))
@@ -96,6 +102,19 @@ func (i *rpcInstance) Self() string {
 
 func (i *rpcInstance) Connect(cb func(context.Context, []byte) ([]byte, error)) {
 	i.cb = cb
+}
+
+func (i *rpcInstance) ListOnlinePeers() []string {
+	peers := i.a.GetPeers()
+	res := make([]string, 0, len(peers))
+	for _, p := range peers {
+		res = append(res, p.name)
+	}
+	return res
+}
+
+func (i *rpcInstance) CountAllPeers() int {
+	return int(i.a.GetPeersCount())
 }
 
 func (i *rpcInstance) call(v any) (any, error) {
