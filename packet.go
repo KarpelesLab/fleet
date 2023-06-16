@@ -3,6 +3,8 @@ package fleet
 import (
 	"encoding/gob"
 	"time"
+
+	"github.com/KarpelesLab/rchan"
 )
 
 func init() {
@@ -43,14 +45,14 @@ type PacketRpc struct {
 	TargetId string
 	SourceId string
 	Endpoint string
-	R        uintptr
+	R        rchan.Id
 	Data     any
 }
 
 type PacketRpcResponse struct {
 	TargetId string
 	SourceId string
-	R        uintptr
+	R        rchan.Id
 	Data     any
 	Error    string
 	HasError bool

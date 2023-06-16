@@ -20,9 +20,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/KarpelesLab/jwt"
+	"github.com/KarpelesLab/rchan"
 	"github.com/KarpelesLab/ringbuf"
 	bolt "go.etcd.io/bbolt"
 )
@@ -53,9 +53,6 @@ type Agent struct {
 	services  map[string]chan net.Conn
 	svcMutex  sync.RWMutex
 	transport http.RoundTripper
-
-	rpc  map[uintptr]chan any
-	rpcL sync.RWMutex
 
 	// log
 	logbuf *ringbuf.Writer
@@ -111,7 +108,6 @@ func spawn() *Agent {
 		port:        61337,
 		peers:       make(map[string]*Peer),
 		services:    make(map[string]chan net.Conn),
-		rpc:         make(map[uintptr]chan any),
 		dbWatch:     make(map[string][]DbWatchCallback),
 		globalLocks: make(map[string]*globalLock),
 	}
@@ -428,22 +424,13 @@ func (a *Agent) AllRPC(ctx context.Context, endpoint string, data any) ([]any, e
 	defer cancel()
 
 	// build response pipe
-	res := make(chan any)
-	resId := uintptr(unsafe.Pointer(&res))
-	a.rpcL.Lock()
-	a.rpc[resId] = res
-	a.rpcL.Unlock()
-
-	defer func() {
-		a.rpcL.Lock()
-		delete(a.rpc, resId)
-		a.rpcL.Unlock()
-	}()
+	id, res := rchan.New()
+	defer id.Release()
 
 	// prepare request
 	pkt := &PacketRpc{
 		SourceId: a.id,
-		R:        resId,
+		R:        id,
 		Endpoint: endpoint,
 		Data:     data,
 	}
@@ -628,17 +615,8 @@ func (a *Agent) RPC(ctx context.Context, id string, endpoint string, data any) (
 		return nil, errors.New("Failed to find peer")
 	}
 
-	res := make(chan any)
-	resId := uintptr(unsafe.Pointer(&res))
-	a.rpcL.Lock()
-	a.rpc[resId] = res
-	a.rpcL.Unlock()
-
-	defer func() {
-		a.rpcL.Lock()
-		defer a.rpcL.Unlock()
-		delete(a.rpc, resId)
-	}()
+	resId, res := rchan.New()
+	defer resId.Release()
 
 	// send request
 	pkt := &PacketRpc{
@@ -714,26 +692,14 @@ func (a *Agent) handleRpcBin(peer *Peer, buf []byte) error {
 	return nil
 }
 
-// getRpcChan returns a data receiving chan associated to a rpc request id
-func (a *Agent) getRpcChan(id uintptr) chan any {
-	a.rpcL.Lock()
-	defer a.rpcL.Unlock()
-
-	c, ok := a.rpc[id]
-	if !ok {
-		return nil
-	}
-	return c
-}
-
 func (a *Agent) handleRpcBinResponse(peer *Peer, buf []byte) error {
 	if len(buf) < 12 {
 		return errors.New("invalid buffer length for response")
 	}
 
-	id := binary.BigEndian.Uint64(buf[4:12])
+	id := rchan.Id(binary.BigEndian.Uint64(buf[4:12]))
 
-	c := a.getRpcChan(uintptr(id))
+	c := id.C()
 	if c == nil {
 		return nil
 	}
@@ -779,7 +745,7 @@ func (a *Agent) handleRpc(pkt *PacketRpc) error {
 }
 
 func (a *Agent) handleRpcResponse(pkt *PacketRpcResponse) error {
-	c := a.getRpcChan(pkt.R)
+	c := pkt.R.C()
 	if c == nil {
 		return nil
 	}

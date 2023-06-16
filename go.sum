@@ -12,6 +12,8 @@ github.com/KarpelesLab/jwt v0.1.1 h1:mCSJIfyVUvEdHZTjhsouMnF6bLE8EvWGxpoVBA17Plc
 github.com/KarpelesLab/jwt v0.1.1/go.mod h1:Liweot6GXvb+Z4Wa0GJ2cGxQMCntYE3JgLbbXfmVpJo=
 github.com/KarpelesLab/jwt v0.1.2 h1:trRFqM7ds7FPbpS80VlCJuIQPswe9l1Q/HWSueFPplQ=
 github.com/KarpelesLab/jwt v0.1.2/go.mod h1:mTM/SK0MrIjAMOXudMLfEPyqTkK4KNQovQIL1esFYWs=
+github.com/KarpelesLab/rchan v1.0.0 h1:eLp2OhASdoSL8BIP80eHySwJQZfECxAHUYd5fU2CeTQ=
+github.com/KarpelesLab/rchan v1.0.0/go.mod h1:Osy4g3kPFTIwBn+N6TVji4goTOdzEJYIlaE7m8nv2sw=
 github.com/KarpelesLab/ringbuf v0.1.2 h1:IlxDIC0IrRKcffvTpXtralYS4u2pDCWiGwEnCt8q0DM=
 github.com/KarpelesLab/ringbuf v0.1.2/go.mod h1:HtEUimh5Rfai5i0ULzx8wm3qhERt1OQ6DvXUxYIQoFM=
 github.com/google/uuid v1.3.0 h1:t6JiXgmwXMjEs8VusXIJk2BXHsn+wx8BZdTaoZ5fu7I=
