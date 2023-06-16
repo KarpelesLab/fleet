@@ -624,6 +624,7 @@ func (p *Peer) writev(ctx context.Context, buf ...[]byte) (n int, err error) {
 			if n > 0 {
 				p.c.Close() // close because that is a partial write
 			}
+			p.c.SetWriteDeadline(time.Time{})
 			return
 		}
 	}
