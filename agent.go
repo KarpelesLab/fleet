@@ -471,39 +471,35 @@ func (a *Agent) AllRPC(ctx context.Context, endpoint string, data any) ([]any, e
 
 func (a *Agent) AllRpcRequest(ctx context.Context, endpoint string, data []byte) ([]any, error) {
 	// call method on ALL hosts and collect responses
+	if len(endpoint) > 65535 {
+		return nil, errors.New("RPC endpoint name length too long")
+	}
 
 	// put a timeout on context just in case
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	// build response pipe
-	res := make(chan any)
+	id, res := rchan.New()
+	defer id.Release()
+
+	buf := make([]byte, 14)
+	binary.BigEndian.PutUint64(buf[:8], uint64(id))
+	binary.BigEndian.PutUint32(buf[8:12], 0) // flags
+	binary.BigEndian.PutUint16(buf[12:14], uint16(len(endpoint)))
+	buf = append(append(buf, endpoint...), data...)
 
 	// send request
-	a.peersMutex.RLock()
-	defer a.peersMutex.RUnlock()
-
 	n := 0
-	for _, p := range a.peers {
+	for _, p := range a.GetPeers() {
 		if p.id == a.id {
 			continue
 		}
 		n += 1
 		go func(p *Peer) {
-			ok, buf, err := p.ssh.SendRequest("rpc/"+endpoint, true, data)
-			var snd any
+			err := p.WritePacket(ctx, PacketRpcBinReq, buf)
 			if err != nil {
-				snd = err
-			} else if !ok {
-				snd = errors.New(string(data))
-			} else {
-				snd = buf
-			}
-			if err == nil && ok {
-				select {
-				case res <- snd:
-				case <-ctx.Done():
-				}
+				id.Send(ctx, err)
 			}
 		}(p)
 	}
@@ -579,22 +575,39 @@ func (a *Agent) BroadcastRpcBin(ctx context.Context, endpoint string, pkt []byte
 }
 
 func (a *Agent) RpcRequest(ctx context.Context, id string, endpoint string, data []byte) ([]byte, error) {
+	if len(endpoint) > 65535 {
+		return nil, errors.New("RPC endpoint name length too long")
+	}
+
 	// send data to given peer
 	p := a.GetPeer(id)
 	if p == nil {
 		return nil, errors.New("Failed to find peer")
 	}
 
-	res, data, err := p.ssh.SendRequest("rpc/"+endpoint, true, data)
+	resId, res := rchan.New()
+	defer resId.Release()
+
+	buf := make([]byte, 14)
+	binary.BigEndian.PutUint64(buf[:8], uint64(resId))
+	binary.BigEndian.PutUint32(buf[8:12], 0) // flags
+	binary.BigEndian.PutUint16(buf[12:14], uint16(len(endpoint)))
+	buf = append(append(buf, endpoint...), data...)
+
+	err := p.WritePacket(ctx, PacketRpcBinReq, buf)
 	if err != nil {
-		return data, err
+		return nil, err
 	}
+	final := <-res
 
-	if !res {
-		return nil, errors.New(string(data))
+	switch v := final.(type) {
+	case error:
+		return nil, v
+	case []byte:
+		return v, nil
+	default:
+		return nil, fmt.Errorf("unsupported response type %T", final)
 	}
-
-	return data, nil
 }
 
 // RpcSend sends a request but expects no response, failure will only reported if the request failed to be
@@ -656,12 +669,13 @@ func (a *Agent) handleRpcBin(peer *Peer, buf []byte) error {
 		return errors.New("packet too small")
 	}
 	// buf format:
-	// <flags>:uint32
 	// <reqId>:uint64
+	// <flags>:uint32
 	// <endpointNameLen>:uint16
 	// <endpointName>:string
 	// <data>
-	flags := binary.BigEndian.Uint32(buf[:4])
+	id := binary.BigEndian.Uint64(buf[:8])
+	flags := binary.BigEndian.Uint32(buf[8:12])
 	pfx := buf[:12]
 	ln := binary.BigEndian.Uint16(buf[12:14])
 	if len(buf) < 14+int(ln) {
@@ -672,6 +686,10 @@ func (a *Agent) handleRpcBin(peer *Peer, buf []byte) error {
 
 	go func() {
 		data, err := CallRpcEndpoint(endpoint, buf)
+		if id == 0 {
+			// do not send any response
+			return
+		}
 		dataB, ok := data.([]byte)
 		if !ok {
 			err = errors.New("RPC method did not return []byte")
@@ -679,7 +697,7 @@ func (a *Agent) handleRpcBin(peer *Peer, buf []byte) error {
 
 		if err != nil {
 			// report error
-			flags |= 0x10000
+			flags |= 0x10000 // ="error"
 			dataB = []byte(err.Error())
 		}
 
@@ -697,11 +715,19 @@ func (a *Agent) handleRpcBinResponse(peer *Peer, buf []byte) error {
 		return errors.New("invalid buffer length for response")
 	}
 
-	id := rchan.Id(binary.BigEndian.Uint64(buf[4:12]))
-
+	id := rchan.Id(binary.BigEndian.Uint64(buf[:8]))
 	c := id.C()
 	if c == nil {
 		return nil
+	}
+
+	flags := binary.BigEndian.Uint64(buf[8:12])
+	buf = buf[12:]
+	val := any(buf)
+
+	if flags&0x10000 == 0x10000 {
+		// error
+		val = errors.New(string(buf))
 	}
 
 	go func() {
@@ -709,7 +735,7 @@ func (a *Agent) handleRpcBinResponse(peer *Peer, buf []byte) error {
 		defer t.Stop()
 
 		select {
-		case c <- buf:
+		case c <- val:
 		case <-t.C:
 			// timeout
 		}
