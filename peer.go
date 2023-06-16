@@ -374,6 +374,10 @@ func (p *Peer) handleBinary(pc uint16, data []byte) error {
 			return err
 		}
 		return p.a.handleNewSeed(data[16:], time.Time(t))
+	case PacketRpcBinReq:
+		return p.a.handleRpcBin(p, data)
+	case PacketRpcBinRes:
+		return p.a.handleRpcBinResponse(p, data)
 	default:
 		if pc >= PacketCustom && pc <= PacketCustomMax {
 			// custom packet

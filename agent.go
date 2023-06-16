@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -53,7 +54,7 @@ type Agent struct {
 	svcMutex  sync.RWMutex
 	transport http.RoundTripper
 
-	rpc  map[uintptr]chan *PacketRpcResponse
+	rpc  map[uintptr]chan any
 	rpcL sync.RWMutex
 
 	// log
@@ -110,7 +111,7 @@ func spawn() *Agent {
 		port:        61337,
 		peers:       make(map[string]*Peer),
 		services:    make(map[string]chan net.Conn),
-		rpc:         make(map[uintptr]chan *PacketRpcResponse),
+		rpc:         make(map[uintptr]chan any),
 		dbWatch:     make(map[string][]DbWatchCallback),
 		globalLocks: make(map[string]*globalLock),
 	}
@@ -427,7 +428,7 @@ func (a *Agent) AllRPC(ctx context.Context, endpoint string, data any) ([]any, e
 	defer cancel()
 
 	// build response pipe
-	res := make(chan *PacketRpcResponse)
+	res := make(chan any)
 	resId := uintptr(unsafe.Pointer(&res))
 	a.rpcL.Lock()
 	a.rpc[resId] = res
@@ -462,7 +463,11 @@ func (a *Agent) AllRPC(ctx context.Context, endpoint string, data any) ([]any, e
 
 	for {
 		select {
-		case v := <-res:
+		case vany := <-res:
+			v, ok := vany.(*PacketRpcResponse)
+			if !ok {
+				continue
+			}
 			if v.HasError {
 				final = append(final, errors.New(v.Error))
 			} else {
@@ -623,7 +628,7 @@ func (a *Agent) RPC(ctx context.Context, id string, endpoint string, data any) (
 		return nil, errors.New("Failed to find peer")
 	}
 
-	res := make(chan *PacketRpcResponse)
+	res := make(chan any)
 	resId := uintptr(unsafe.Pointer(&res))
 	a.rpcL.Lock()
 	a.rpc[resId] = res
@@ -631,8 +636,8 @@ func (a *Agent) RPC(ctx context.Context, id string, endpoint string, data any) (
 
 	defer func() {
 		a.rpcL.Lock()
+		defer a.rpcL.Unlock()
 		delete(a.rpc, resId)
-		a.rpcL.Unlock()
 	}()
 
 	// send request
@@ -648,7 +653,11 @@ func (a *Agent) RPC(ctx context.Context, id string, endpoint string, data any) (
 
 	// get response
 	select {
-	case r := <-res:
+	case rany := <-res:
+		r, ok := rany.(*PacketRpcResponse)
+		if !ok {
+			return nil, errors.New("invalid response type")
+		}
 		if r == nil {
 			return nil, errors.New("failed to wait for response")
 		}
@@ -662,6 +671,84 @@ func (a *Agent) RPC(ctx context.Context, id string, endpoint string, data any) (
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+func (a *Agent) handleRpcBin(peer *Peer, buf []byte) error {
+	if len(buf) < 14 {
+		return errors.New("packet too small")
+	}
+	// buf format:
+	// <flags>:uint32
+	// <reqId>:uint64
+	// <endpointNameLen>:uint16
+	// <endpointName>:string
+	// <data>
+	flags := binary.BigEndian.Uint32(buf[:4])
+	pfx := buf[:12]
+	ln := binary.BigEndian.Uint16(buf[12:14])
+	if len(buf) < 14+int(ln) {
+		return errors.New("packet too small 2")
+	}
+	endpoint := string(buf[14 : int(ln)+14])
+	buf = buf[int(ln)+14:]
+
+	go func() {
+		data, err := CallRpcEndpoint(endpoint, buf)
+		dataB, ok := data.([]byte)
+		if !ok {
+			err = errors.New("RPC method did not return []byte")
+		}
+
+		if err != nil {
+			// report error
+			flags |= 0x10000
+			dataB = []byte(err.Error())
+		}
+
+		res := append(pfx, dataB...)
+		binary.BigEndian.PutUint32(res[:4], flags) // update flags if needed
+
+		// return result by sending packet
+		peer.WritePacket(context.Background(), PacketRpcBinRes, res)
+	}()
+	return nil
+}
+
+// getRpcChan returns a data receiving chan associated to a rpc request id
+func (a *Agent) getRpcChan(id uintptr) chan any {
+	a.rpcL.Lock()
+	defer a.rpcL.Unlock()
+
+	c, ok := a.rpc[id]
+	if !ok {
+		return nil
+	}
+	return c
+}
+
+func (a *Agent) handleRpcBinResponse(peer *Peer, buf []byte) error {
+	if len(buf) < 12 {
+		return errors.New("invalid buffer length for response")
+	}
+
+	id := binary.BigEndian.Uint64(buf[4:12])
+
+	c := a.getRpcChan(uintptr(id))
+	if c == nil {
+		return nil
+	}
+
+	go func() {
+		t := time.NewTimer(time.Second)
+		defer t.Stop()
+
+		select {
+		case c <- buf:
+		case <-t.C:
+			// timeout
+		}
+	}()
+	return nil
 }
 
 func (a *Agent) handleRpc(pkt *PacketRpc) error {
@@ -692,11 +779,8 @@ func (a *Agent) handleRpc(pkt *PacketRpc) error {
 }
 
 func (a *Agent) handleRpcResponse(pkt *PacketRpcResponse) error {
-	a.rpcL.Lock()
-	defer a.rpcL.Unlock()
-
-	c, ok := a.rpc[pkt.R]
-	if !ok {
+	c := a.getRpcChan(pkt.R)
+	if c == nil {
 		return nil
 	}
 
