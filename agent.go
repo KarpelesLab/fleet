@@ -619,6 +619,9 @@ func (a *Agent) RpcSend(ctx context.Context, id string, endpoint string, data []
 	}
 
 	_, _, err := p.ssh.SendRequest("rpc/"+endpoint, false, data)
+	if err != nil {
+		log.Printf("[fleet] failed sending RPC packet to peer %s: %s", p.name, err)
+	}
 	return err
 }
 

@@ -636,6 +636,9 @@ func (p *Peer) WritePacket(ctx context.Context, pc uint16, data []byte) error {
 		// send as fbin request
 		pcBin := []byte{byte(pc >> 8), byte(pc)}
 		_, _, err := p.ssh.SendRequest("fbin", false, append(pcBin, data...))
+		if err != nil {
+			log.Printf("[fleet] WritePacket to %s via SSH failed: %s", p.name, err)
+		}
 		return err
 	}
 
