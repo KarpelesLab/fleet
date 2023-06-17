@@ -233,7 +233,7 @@ func (p *Peer) handleSshRequests(reqs <-chan *ssh.Request) {
 				} else {
 					req.Reply(true, data.([]byte))
 				}
-				return
+				break
 			}
 			// unsupported
 			req.Reply(false, nil)
