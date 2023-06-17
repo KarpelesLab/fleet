@@ -15,6 +15,7 @@ require (
 require golang.org/x/sys v0.9.0 // indirect
 
 retract (
+	[v0.9.1, v0.9.7] // bug with ssh RPC
 	v0.9.0 // buggy, not to be used
 	[v0.8.8, v0.8.10] // experimental fssh support failure
 )
