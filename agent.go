@@ -724,7 +724,7 @@ func (a *Agent) handleRpcBinResponse(peer *Peer, buf []byte) error {
 		return nil
 	}
 
-	flags := binary.BigEndian.Uint64(buf[8:12])
+	flags := binary.BigEndian.Uint32(buf[8:12])
 	buf = buf[12:]
 	val := any(buf)
 
