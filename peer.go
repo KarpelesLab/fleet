@@ -239,6 +239,8 @@ func (p *Peer) handleSshRequests(reqs <-chan *ssh.Request) {
 			req.Reply(false, nil)
 		}
 	}
+
+	log.Printf("[fleet] SSH connection is out of requests")
 }
 
 func (p *Peer) handleSshChans(chans <-chan ssh.NewChannel) {
@@ -271,6 +273,8 @@ func (p *Peer) handleSshChans(chans <-chan ssh.NewChannel) {
 			ch.Reject(ssh.UnknownChannelType, "unknown channel type")
 		}
 	}
+
+	log.Printf("[fleet] SSH connection is out of channels")
 }
 
 func (p *Peer) retryLater(t time.Duration) {
