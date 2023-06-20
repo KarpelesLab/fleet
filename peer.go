@@ -24,7 +24,6 @@ import (
 
 type Peer struct {
 	c         *tls.Conn
-	outStream [][]byte
 	id        string
 	name      string
 	division  string

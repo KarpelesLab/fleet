@@ -582,7 +582,7 @@ func (a *Agent) RpcRequest(ctx context.Context, id string, endpoint string, data
 	// send data to given peer
 	p := a.GetPeer(id)
 	if p == nil {
-		return nil, errors.New("Failed to find peer")
+		return nil, errors.New("failed to find peer")
 	}
 
 	resId, res := rchan.New()
@@ -615,7 +615,7 @@ func (a *Agent) RpcRequest(ctx context.Context, id string, endpoint string, data
 func (a *Agent) RpcSend(ctx context.Context, id string, endpoint string, data []byte) error {
 	p := a.GetPeer(id)
 	if p == nil {
-		return errors.New("Failed to find peer")
+		return errors.New("failed to find peer")
 	}
 
 	_, _, err := p.ssh.SendRequest("rpc/"+endpoint, false, data)
@@ -628,7 +628,7 @@ func (a *Agent) RpcSend(ctx context.Context, id string, endpoint string, data []
 func (a *Agent) RPC(ctx context.Context, id string, endpoint string, data any) (any, error) {
 	p := a.GetPeer(id)
 	if p == nil {
-		return nil, errors.New("Failed to find peer")
+		return nil, errors.New("failed to find peer")
 	}
 
 	resId, res := rchan.New()
@@ -848,11 +848,8 @@ func (a *Agent) listenLoop() {
 func (a *Agent) eventLoop() {
 	announce := time.NewTicker(30 * time.Second)
 
-	for {
-		select {
-		case <-announce.C:
-			a.doAnnounce()
-		}
+	for range announce.C {
+		a.doAnnounce()
 	}
 }
 
@@ -892,22 +889,6 @@ func (a *Agent) doAnnounce() {
 		}(p)
 	}
 	wg.Wait()
-}
-
-func (a *Agent) doBroadcast(ctx context.Context, pkt Packet, except_id string) {
-	peers := a.GetPeers()
-
-	if len(peers) == 0 {
-		return
-	}
-
-	for _, p := range peers {
-		if p.id == except_id {
-			continue
-		}
-		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
-		go p.Send(ctx, pkt)
-	}
 }
 
 func (a *Agent) DumpInfo(w io.Writer) {

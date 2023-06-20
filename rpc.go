@@ -7,6 +7,7 @@ import (
 	"log"
 )
 
+// RpcEndpoint represents a callback function for the legacy RPC system
 type RpcEndpoint func(any) (any, error)
 
 var (

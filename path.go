@@ -3,7 +3,6 @@ package fleet
 import (
 	"errors"
 	"io/fs"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -85,7 +84,7 @@ func (a *Agent) getFile(filename string, cb func([]byte) error) error {
 		return err
 	}
 	log.Printf("[fleet] located file %s", fn)
-	data, err := ioutil.ReadFile(fn)
+	data, err := os.ReadFile(fn)
 	if err != nil {
 		log.Printf("[fleet] Failed to read %s: %s", filename, err)
 		return err

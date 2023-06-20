@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"time"
@@ -64,7 +63,7 @@ func (a *Agent) initSeed() {
 		n, err := f.Read(s)
 		if n == 128 && err == nil {
 			// read the timestamp
-			tsBin, err := ioutil.ReadAll(f)
+			tsBin, err := io.ReadAll(f)
 			if err == nil {
 				t := time.Time{}
 				if t.UnmarshalBinary(tsBin) == nil {
@@ -190,7 +189,7 @@ func (a *Agent) handleNewSeed(s []byte, t time.Time) error {
 		// time is more recent, ignore seed
 		return nil
 	}
-	if bytes.Compare(s, cur.seed) == 0 {
+	if bytes.Equal(s, cur.seed) {
 		return nil // same seed already
 	}
 	if t == cur.ts {

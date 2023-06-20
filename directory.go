@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -186,7 +186,7 @@ func (a *Agent) jwtPingDirectory(dir string, jwt []byte, client *http.Client) er
 	var res *directoryPingResponse
 
 	if resp.StatusCode > 299 {
-		buf, _ := ioutil.ReadAll(resp.Body)
+		buf, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("invalid response from server: %s (data: %s)", resp.Status, buf)
 	}
 

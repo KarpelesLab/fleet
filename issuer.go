@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"time"
@@ -38,7 +37,7 @@ func WithIssuer(url string, opts ...AgentOption) *Agent {
 			// this will result in a loop call when using getLocalKey(), so reject it now
 			fn, err := findFile(f)
 			if err == nil {
-				return ioutil.ReadFile(fn)
+				return os.ReadFile(fn)
 			}
 			return nil, fs.ErrNotExist
 		}
@@ -88,6 +87,9 @@ func WithIssuer(url string, opts ...AgentOption) *Agent {
 
 		// Pass "sig" in header
 		req, err := http.NewRequest("POST", url, bytes.NewReader(bodyBin))
+		if err != nil {
+			return nil, fmt.Errorf("failed to initate request to issuer: %w", err)
+		}
 		req.Header.Set("Sec-Body-Signature", base64.RawURLEncoding.EncodeToString(sig))
 		req.Header.Set("Content-Type", "application/json")
 
