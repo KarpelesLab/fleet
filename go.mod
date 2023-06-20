@@ -1,6 +1,6 @@
 module github.com/KarpelesLab/fleet
 
-go 1.19
+go 1.20
 
 require (
 	github.com/KarpelesLab/goupd v0.3.1
