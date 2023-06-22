@@ -383,9 +383,9 @@ func (a *Agent) handleLockRes(p *Peer, data []byte) error {
 		return nil
 	}
 
-	if cnt < 3 {
+	if cnt == 2 {
 		// special rule
-		if uint32(len(g.aye)) >= cnt {
+		if uint32(len(g.aye)) >= 1 {
 			// we got a aye
 			g.setStatus(1)
 			return nil

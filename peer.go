@@ -23,14 +23,14 @@ import (
 )
 
 type Peer struct {
-	c         *tls.Conn
-	id        string
-	name      string
-	division  string
-	protocol  string
-	addr      *net.TCPAddr
-	valid     bool
-	ssh       ssh.Conn
+	c        *tls.Conn
+	id       string
+	name     string
+	division string
+	protocol string
+	addr     *net.TCPAddr
+	valid    bool
+	ssh      ssh.Conn
 
 	annIdx    uint64
 	numG      uint32
