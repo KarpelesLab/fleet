@@ -3,7 +3,6 @@ package fleet
 import (
 	"crypto"
 	"encoding/asn1"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -70,20 +69,16 @@ func (k *tpmKey) Public() crypto.PublicKey {
 
 func (k *tpmKey) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 	// rand will be ignored because the tpm will do the signature
-	// digest will require to be using sha256
-	if opts.HashFunc() != crypto.SHA256 {
-		return nil, errors.New("unsupported hashing algo")
-	}
 
-	// should we pass Hash: AlgNull or Hash: AlgSha256?
 	sig, err := tpm2.Sign(k.rwc, k.handle, "", digest, nil, &tpm2.SigScheme{Alg: tpm2.AlgECDSA, Hash: tpm2.AlgNull})
 	if err != nil {
 		return nil, err
 	}
 
+	// prepare a structure that can be marshalled by asn1
 	ecdsaSig := ecdsaSignature{
-		R: sig.ECC.R, // the X value is used as 'R' in ECDSA
-		S: sig.ECC.S, // the Y value is used as 'S' in ECDSA
+		R: sig.ECC.R,
+		S: sig.ECC.S,
 	}
 	return asn1.Marshal(ecdsaSig)
 }
