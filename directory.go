@@ -132,6 +132,8 @@ func (a *Agent) directoryThreadStart() bool {
 	}
 	client := &http.Client{Transport: tr}
 
+	a.setStatus(1)
+
 	go func() {
 		for {
 			// connect to directory, ping, etc

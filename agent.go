@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -53,6 +54,10 @@ type Agent struct {
 	services  map[string]chan net.Conn
 	svcMutex  sync.RWMutex
 	transport http.RoundTripper
+
+	status     int // 0=waiting 1=ready
+	statusLock sync.RWMutex
+	statusCond *sync.Cond
 
 	// log
 	logbuf *ringbuf.Writer
@@ -113,6 +118,7 @@ func spawn() *Agent {
 	}
 	a.pubCert = &crtCache{a: a, k: "public_key"}
 	a.intCert = &crtCache{a: a, k: "internal_key"}
+	a.statusCond = sync.NewCond(a.statusLock.RLocker())
 	runtime.SetFinalizer(a, closeAgentect)
 	return a
 }
@@ -137,6 +143,32 @@ func closeAgentect(a *Agent) {
 func (a *Agent) Close() {
 	a.shutdownDb()
 	a.shutdownLog()
+}
+
+func (a *Agent) GetStatus() int {
+	a.statusLock.RLock()
+	defer a.statusLock.RUnlock()
+	return a.status
+}
+
+func (a *Agent) setStatus(s int) {
+	a.statusLock.Lock()
+	defer a.statusLock.Unlock()
+	a.status = s
+	a.statusCond.Broadcast()
+}
+
+// WaitReady will lock until the agent is ready for operation (connected to other peers)
+func (a *Agent) WaitReady() {
+	a.statusLock.RLock()
+	defer a.statusLock.RUnlock()
+
+	for {
+		if a.status == 1 {
+			return
+		}
+		a.statusCond.Wait()
+	}
 }
 
 func (a *Agent) doInit(token *jwt.Token) (err error) {
@@ -1047,4 +1079,19 @@ func (a *Agent) copyMeta() map[string]any {
 	}
 
 	return res
+}
+
+// Settings fetches the current settings from the global system and returns these
+// if the system is initializing, this will block until initialization is done
+func (a *Agent) Settings() (map[string]any, error) {
+	a.WaitReady()
+
+	// attempt to load settings
+	v, err := a.dbFleetLoad("settings:json")
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]any
+	err = json.Unmarshal(v, &res)
+	return res, err
 }
