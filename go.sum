@@ -18,6 +18,8 @@ github.com/KarpelesLab/rchan v1.0.1 h1:uIkAAp/50NjY+j0LTkWmyk2h+RzIu525Y4Dg/vMxV
 github.com/KarpelesLab/rchan v1.0.1/go.mod h1:Osy4g3kPFTIwBn+N6TVji4goTOdzEJYIlaE7m8nv2sw=
 github.com/KarpelesLab/ringbuf v0.1.2 h1:IlxDIC0IrRKcffvTpXtralYS4u2pDCWiGwEnCt8q0DM=
 github.com/KarpelesLab/ringbuf v0.1.2/go.mod h1:HtEUimh5Rfai5i0ULzx8wm3qhERt1OQ6DvXUxYIQoFM=
+github.com/google/go-tpm v0.9.0 h1:sQF6YqWMi+SCXpsmS3fd21oPy/vSddwZry4JnmltHVk=
+github.com/google/go-tpm v0.9.0/go.mod h1:FkNVkc6C+IsvDI9Jw1OveJmxGZUUaKxtrpOS47QWKfU=
 github.com/google/uuid v1.3.0 h1:t6JiXgmwXMjEs8VusXIJk2BXHsn+wx8BZdTaoZ5fu7I=
 github.com/google/uuid v1.3.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 go.etcd.io/bbolt v1.3.6 h1:/ecaJf0sk1l4l6V4awd65v2C3ILy7MSj+s/x1ADCIMU=

@@ -22,6 +22,10 @@ import (
 func (a *Agent) getLocalKey() (crypto.Signer, error) {
 	keyPem, err := a.dbFleetGet("internal_key:key")
 	if err != nil {
+		// we might be able to use a tpm key (we only do that if there was no key)
+		if _, err := os.Stat("/dev/tpm0"); err == nil {
+			return a.getTpmKey()
+		}
 		// gen & save a new key
 		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		if err != nil {
