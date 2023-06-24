@@ -16,6 +16,7 @@ import (
 type tpmKey struct {
 	rwc    io.ReadWriteCloser
 	handle tpmutil.Handle
+	lk     sync.Mutex
 }
 
 var (
@@ -51,6 +52,9 @@ func (a *Agent) getTpmKey() (crypto.Signer, error) {
 }
 
 func (k *tpmKey) Public() crypto.PublicKey {
+	k.lk.Lock()
+	defer k.lk.Unlock()
+
 	pub, _, _, err := tpm2.ReadPublic(k.rwc, k.handle)
 	if err != nil {
 		// attempt to create key since fetching failed
@@ -78,6 +82,9 @@ func (k *tpmKey) Public() crypto.PublicKey {
 }
 
 func (k *tpmKey) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+	k.lk.Lock()
+	defer k.lk.Unlock()
+
 	// rand will be ignored because the tpm will do the signature
 
 	sig, err := tpm2.Sign(k.rwc, k.handle, "", digest, nil, &tpm2.SigScheme{Alg: tpm2.AlgECDSA, Hash: tpm2.AlgSHA256})
