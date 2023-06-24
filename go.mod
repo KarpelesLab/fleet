@@ -7,15 +7,14 @@ require (
 	github.com/KarpelesLab/jwt v0.1.2
 	github.com/KarpelesLab/rchan v1.0.1
 	github.com/KarpelesLab/ringbuf v0.1.2
+	github.com/google/go-tpm v0.9.0
+	github.com/google/go-tpm-tools v0.3.13-0.20230620182252-4639ecce2aba
 	github.com/google/uuid v1.3.0
 	go.etcd.io/bbolt v1.3.7
 	golang.org/x/crypto v0.10.0
 )
 
-require (
-	github.com/google/go-tpm v0.9.0 // indirect
-	golang.org/x/sys v0.9.0 // indirect
-)
+require golang.org/x/sys v0.9.0 // indirect
 
 retract (
 	v0.9.8 // crash on rpc

@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"math/big"
+	"sync"
 
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
@@ -16,6 +17,11 @@ type tpmKey struct {
 	rwc    io.ReadWriteCloser
 	handle tpmutil.Handle
 }
+
+var (
+	tpmKeyObject *tpmKey
+	tpmKeyOnce   sync.Once
+)
 
 // This struct is used to marshal and unmarshal an ECDSA signature,
 // which consists of two big integers.
@@ -33,12 +39,15 @@ func (a *Agent) getTpmKey() (crypto.Signer, error) {
 		return nil, err
 	}
 
-	key := &tpmKey{
-		rwc:    rwc,
-		handle: tpmutil.Handle(0x81010001),
-	}
+	// only perform this after we got a successful connection to the tpm
+	tpmKeyOnce.Do(func() {
+		tpmKeyObject = &tpmKey{
+			rwc:    rwc,
+			handle: tpmutil.Handle(0x81010001),
+		}
+	})
 
-	return key, nil
+	return tpmKeyObject, nil
 }
 
 func (k *tpmKey) Public() crypto.PublicKey {
@@ -46,6 +55,7 @@ func (k *tpmKey) Public() crypto.PublicKey {
 	if err != nil {
 		// attempt to create key since fetching failed
 		// chatgpt says the error when a handle is not found is "handle 1 unsupported" but that sounds suspicious
+		// Microsoft simulator returns: handle 1, error code 0xb : the handle is not correct for the use
 		log.Printf("[tpm] failed to fetch key from tpm, will attempt to create one. Error: %s", err)
 		err = k.createKey()
 		if err == nil {
@@ -70,7 +80,7 @@ func (k *tpmKey) Public() crypto.PublicKey {
 func (k *tpmKey) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 	// rand will be ignored because the tpm will do the signature
 
-	sig, err := tpm2.Sign(k.rwc, k.handle, "", digest, nil, &tpm2.SigScheme{Alg: tpm2.AlgECDSA, Hash: tpm2.AlgNull})
+	sig, err := tpm2.Sign(k.rwc, k.handle, "", digest, nil, &tpm2.SigScheme{Alg: tpm2.AlgECDSA, Hash: tpm2.AlgSHA256})
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +98,7 @@ func (k *tpmKey) createKey() error {
 	public := tpm2.Public{
 		Type:       tpm2.AlgECC,
 		NameAlg:    tpm2.AlgSHA256,
-		Attributes: tpm2.FlagSignerDefault,
+		Attributes: tpm2.FlagSign | tpm2.FlagFixedTPM | tpm2.FlagFixedParent | tpm2.FlagSensitiveDataOrigin | tpm2.FlagUserWithAuth,
 		ECCParameters: &tpm2.ECCParams{
 			Symmetric: &tpm2.SymScheme{Alg: tpm2.AlgNull, KeyBits: 0, Mode: 0},
 			Sign:      &tpm2.SigScheme{Alg: tpm2.AlgECDSA, Hash: tpm2.AlgSHA256},
