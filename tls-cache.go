@@ -3,6 +3,8 @@ package fleet
 import (
 	"crypto"
 	"crypto/tls"
+	"encoding/pem"
+	"errors"
 	"log"
 	"sync"
 	"time"
@@ -84,6 +86,31 @@ func (c *crtCache) loadCert() (*tls.Certificate, error) {
 		return nil, err
 	}
 	key, err := c.a.dbFleetGet(c.k + ":key")
+	if err != nil && c.k == "internal_key" {
+		// check for tpm key
+		var s crypto.Signer
+		s, err = c.a.getTpmKey()
+		if err == nil {
+			// we need to generate the appropriate object to use this certificate with the tpm
+			res := &tls.Certificate{}
+			var derBlock *pem.Block
+			for {
+				derBlock, crt = pem.Decode(crt)
+				if derBlock == nil {
+					break
+				}
+				if derBlock.Type == "CERTIFICATE" {
+					res.Certificate = append(res.Certificate, derBlock.Bytes)
+				}
+			}
+			if len(res.Certificate) == 0 {
+				return nil, errors.New("tls: failed to find any PEM data in internal_key:crt certificate input")
+			}
+			// note that we aren't checking if the certificate matches the key, maybe we should but it's not cheap on an external auth device
+			res.PrivateKey = s
+			return res, nil
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
