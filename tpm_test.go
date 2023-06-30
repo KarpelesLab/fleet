@@ -79,4 +79,12 @@ func TestTpm(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to check signature: %s", err)
 	}
+
+	// test attest
+	attest, err := ktest.(interface{ Attest() ([]byte, error) }).Attest()
+	if err != nil {
+		t.Errorf("attest failed = %s", err)
+	} else {
+		log.Printf("attest = %s", attest)
+	}
 }

@@ -106,7 +106,7 @@ func (k *tpmKey) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) ([]
 	return asn1.Marshal(ecdsaSig)
 }
 
-func (k *tpmKey) attest() ([]byte, error) {
+func (k *tpmKey) Attest() ([]byte, error) {
 	// attempt to generate attestation
 	t := time.Now()
 	buf := make([]byte, 12)
@@ -123,10 +123,12 @@ func (k *tpmKey) attest() ([]byte, error) {
 		return nil, fmt.Errorf("while marshaling public key: %w", err)
 	}
 
+	nonce := buf // append(buf, pubB...)
+	_ = pubB
+
+	log.Printf("preparing to attest nonce=%x", nonce)
+
 	// prepare attestation
-	opts := client.AttestOpts{
-		Nonce: append(buf, pubB...),
-	}
 	key, err := client.GceAttestationKeyECC(tpmConn)
 	if err != nil {
 		log.Printf("[tpm] failed loading gce key, attempting standard attestation key...")
@@ -136,7 +138,7 @@ func (k *tpmKey) attest() ([]byte, error) {
 		log.Printf("[tpm] attestation key not available: %s", err)
 		return nil, fmt.Errorf("failed loading attestation key: %w", err)
 	}
-	res, err := key.Attest(opts)
+	res, err := key.Attest(client.AttestOpts{Nonce: nonce})
 	if err != nil {
 		return nil, fmt.Errorf("failed to attest: %w", err)
 	}

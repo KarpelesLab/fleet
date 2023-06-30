@@ -934,6 +934,16 @@ func (a *Agent) DumpInfo(w io.Writer) {
 	fmt.Fprintf(w, "Division:   %s\n", a.division)
 	fmt.Fprintf(w, "Local ID:   %s\n", a.id)
 	fmt.Fprintf(w, "Seed ID:    %s (seed stamp: %s)\n", a.SeedId(), a.seed.ts)
+	if tk := tpmKeyObject; tk != nil {
+		// we have a tpm key
+		fmt.Fprintf(w, "TPM key:    YES\n")
+		attest, err := tk.Attest()
+		if err == nil {
+			fmt.Fprintf(w, "TPM Attest: %s\n", attest)
+		} else {
+			fmt.Fprintf(w, "TPM Attest: failed=%s\n", err)
+		}
+	}
 	fmt.Fprintf(w, "\n")
 
 	a.peersMutex.RLock()
@@ -1118,4 +1128,12 @@ func (a *Agent) updateSettings() error {
 
 	a.settings = res
 	return nil
+}
+
+func (a *Agent) GetStringSetting(v string) string {
+	s, _ := a.Settings()
+	if res, ok := s[v].(string); ok {
+		return res
+	}
+	return os.Getenv(v)
 }
