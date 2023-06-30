@@ -2,7 +2,9 @@ package fleet
 
 import (
 	"crypto"
+	"crypto/x509"
 	"encoding/asn1"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
@@ -42,6 +44,12 @@ func (a *Agent) getTpmKey() (crypto.Signer, error) {
 		tpmKeyObject = &tpmKey{
 			rwc:    rwc,
 			handle: tpmutil.Handle(0x81010001),
+		}
+		public := tpmKeyObject.Public()
+		if pubB, err := x509.MarshalPKIXPublicKey(public); err == nil {
+			log.Printf("[tpm] Loaded key which public key is: %s", base64.RawURLEncoding.EncodeToString(pubB))
+		} else {
+			log.Printf("[tpm] failed to marshal public key: %s", err)
 		}
 	})
 
@@ -98,6 +106,7 @@ func (k *tpmKey) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) ([]
 }
 
 func (k *tpmKey) createKey() error {
+	log.Printf("[tpm] Creating public key...")
 	// Define the template for the key
 	public := tpm2.Public{
 		Type:       tpm2.AlgECC,
@@ -119,6 +128,8 @@ func (k *tpmKey) createKey() error {
 	if err != nil {
 		return fmt.Errorf("failed creating ECC key: %w", err)
 	}
+
+	log.Printf("[tpm] Persisting key...")
 
 	// make it persistant
 	err = tpm2.EvictControl(k.rwc, "", tpm2.HandleOwner, handle, k.handle)
