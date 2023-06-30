@@ -84,6 +84,10 @@ type Agent struct {
 	// cert cache
 	pubCert *crtCache
 	intCert *crtCache
+
+	// settings
+	settings        map[string]any
+	settingsUpdated time.Time
 }
 
 // New will just initialize a basic agent without any settings
@@ -1084,12 +1088,34 @@ func (a *Agent) copyMeta() map[string]any {
 // Settings fetches the current settings from the global system and returns these
 // if the system is initializing, this will block until initialization is done
 func (a *Agent) Settings() (map[string]any, error) {
+	if a.settings == nil {
+		a.settingsUpdated = time.Now()
+		err := a.updateSettings()
+		if err != nil {
+			return nil, err
+		}
+		// update done
+		return a.settings, nil
+	}
+	if time.Since(a.settingsUpdated) > 24*time.Hour {
+		a.settingsUpdated = time.Now()
+		go a.updateSettings()
+	}
+	return a.settings, nil
+}
+
+func (a *Agent) updateSettings() error {
 	// attempt to load settings
 	v, err := a.dbFleetLoad("settings:json")
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var res map[string]any
 	err = json.Unmarshal(v, &res)
-	return res, err
+	if err != nil {
+		return err
+	}
+
+	a.settings = res
+	return nil
 }
