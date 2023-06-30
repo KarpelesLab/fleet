@@ -4,26 +4,42 @@ import (
 	"crypto"
 	"crypto/x509"
 	"encoding/asn1"
-	"encoding/base64"
+	"encoding/binary"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"math/big"
 	"sync"
+	"time"
 
+	"github.com/google/go-tpm-tools/client"
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 )
 
 type tpmKey struct {
-	rwc    io.ReadWriteCloser
-	handle tpmutil.Handle
-	lk     sync.Mutex
+	lk  sync.Mutex
+	key *client.Key
 }
 
 var (
 	tpmKeyObject *tpmKey
+	tpmKeyInit   sync.Mutex
 	tpmKeyOnce   sync.Once
+	tpmConn      io.ReadWriteCloser
+
+	tpmKeyTemplate = tpm2.Public{
+		Type:       tpm2.AlgECC,
+		NameAlg:    tpm2.AlgSHA256,
+		Attributes: tpm2.FlagSign | tpm2.FlagFixedTPM | tpm2.FlagFixedParent | tpm2.FlagSensitiveDataOrigin | tpm2.FlagUserWithAuth,
+		ECCParameters: &tpm2.ECCParams{
+			Symmetric: &tpm2.SymScheme{Alg: tpm2.AlgNull, KeyBits: 0, Mode: 0},
+			Sign:      &tpm2.SigScheme{Alg: tpm2.AlgECDSA, Hash: tpm2.AlgSHA256},
+			CurveID:   tpm2.CurveNISTP256,
+		},
+	}
 )
 
 // This struct is used to marshal and unmarshal an ECDSA signature,
@@ -33,57 +49,43 @@ type ecdsaSignature struct {
 }
 
 func (a *Agent) getTpmKey() (crypto.Signer, error) {
+	return getTpmKey()
+}
+
+func getTpmKey() (crypto.Signer, error) {
+	tpmKeyInit.Lock()
+	defer tpmKeyInit.Unlock()
+
+	if tpmKeyObject != nil {
+		return tpmKeyObject, nil
+	}
+
 	// the default paths on Linux (/dev/tpmrm0 then /dev/tpm0), will be used
-	rwc, err := tpm2open()
+	var err error
+	if tpmConn == nil {
+		tpmConn, err = tpm2open()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// only perform this after we got a successful connection to the tpm
+	handle := tpmutil.Handle(0x81010001)
+	var key *client.Key
+	key, err = client.NewCachedKey(tpmConn, tpm2.HandleOwner, tpmKeyTemplate, handle)
 	if err != nil {
 		return nil, err
 	}
 
-	// only perform this after we got a successful connection to the tpm
-	tpmKeyOnce.Do(func() {
-		tpmKeyObject = &tpmKey{
-			rwc:    rwc,
-			handle: tpmutil.Handle(0x81010001),
-		}
-		public := tpmKeyObject.Public()
-		if pubB, err := x509.MarshalPKIXPublicKey(public); err == nil {
-			log.Printf("[tpm] Loaded key which public key is: %s", base64.RawURLEncoding.EncodeToString(pubB))
-		} else {
-			log.Printf("[tpm] failed to marshal public key: %s", err)
-		}
-	})
+	tpmKeyObject = &tpmKey{
+		key: key,
+	}
 
 	return tpmKeyObject, nil
 }
 
 func (k *tpmKey) Public() crypto.PublicKey {
-	k.lk.Lock()
-	defer k.lk.Unlock()
-
-	pub, _, _, err := tpm2.ReadPublic(k.rwc, k.handle)
-	if err != nil {
-		// attempt to create key since fetching failed
-		// chatgpt says the error when a handle is not found is "handle 1 unsupported" but that sounds suspicious
-		// Microsoft simulator returns: handle 1, error code 0xb : the handle is not correct for the use
-		log.Printf("[tpm] failed to fetch key from tpm, will attempt to create one. Error: %s", err)
-		err = k.createKey()
-		if err == nil {
-			// creation succeeded, try to fetch it again
-			pub, _, _, err = tpm2.ReadPublic(k.rwc, k.handle)
-		}
-	}
-
-	if err == nil {
-		pubk, err := pub.Key()
-		if err != nil {
-			log.Printf("[tpm] failed to decode public key from tpm: %s", err)
-			return nil
-		}
-		return pubk
-	} else {
-		log.Printf("[tpm] failed to read public key from tpm: %s", err)
-		return nil
-	}
+	return k.key.PublicKey()
 }
 
 func (k *tpmKey) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
@@ -91,8 +93,7 @@ func (k *tpmKey) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) ([]
 	defer k.lk.Unlock()
 
 	// rand will be ignored because the tpm will do the signature
-
-	sig, err := tpm2.Sign(k.rwc, k.handle, "", digest, nil, &tpm2.SigScheme{Alg: tpm2.AlgECDSA, Hash: tpm2.AlgSHA256})
+	sig, err := tpm2.Sign(tpmConn, k.key.Handle(), "", digest, nil, &tpm2.SigScheme{Alg: tpm2.AlgECDSA, Hash: tpm2.AlgSHA256})
 	if err != nil {
 		return nil, err
 	}
@@ -105,37 +106,40 @@ func (k *tpmKey) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) ([]
 	return asn1.Marshal(ecdsaSig)
 }
 
-func (k *tpmKey) createKey() error {
-	log.Printf("[tpm] Creating public key...")
-	// Define the template for the key
-	public := tpm2.Public{
-		Type:       tpm2.AlgECC,
-		NameAlg:    tpm2.AlgSHA256,
-		Attributes: tpm2.FlagSign | tpm2.FlagFixedTPM | tpm2.FlagFixedParent | tpm2.FlagSensitiveDataOrigin | tpm2.FlagUserWithAuth,
-		ECCParameters: &tpm2.ECCParams{
-			Symmetric: &tpm2.SymScheme{Alg: tpm2.AlgNull, KeyBits: 0, Mode: 0},
-			Sign:      &tpm2.SigScheme{Alg: tpm2.AlgECDSA, Hash: tpm2.AlgSHA256},
-			CurveID:   tpm2.CurveNISTP256,
-		},
+func (k *tpmKey) attest() ([]byte, error) {
+	// attempt to generate attestation
+	t := time.Now()
+	buf := make([]byte, 12)
+	binary.BigEndian.PutUint64(buf[:8], uint64(t.Unix()))
+	binary.BigEndian.PutUint32(buf[8:], uint32(t.Nanosecond()))
+
+	// grab public key
+	pubK := k.Public()
+	if pubK == nil {
+		return nil, errors.New("no public key")
 	}
-
-	// Define the parameters for the key
-	params := tpm2.PCRSelection{}
-
-	// Create the key
-	// func CreatePrimary(rw io.ReadWriter, owner tpmutil.Handle, sel PCRSelection, parentPassword, ownerPassword string, p Public) (tpmutil.Handle, crypto.PublicKey, error)
-	handle, _, err := tpm2.CreatePrimary(k.rwc, tpm2.HandleOwner, params, "", "", public)
+	pubB, err := x509.MarshalPKIXPublicKey(pubK)
 	if err != nil {
-		return fmt.Errorf("failed creating ECC key: %w", err)
+		return nil, fmt.Errorf("while marshaling public key: %w", err)
 	}
 
-	log.Printf("[tpm] Persisting key...")
-
-	// make it persistant
-	err = tpm2.EvictControl(k.rwc, "", tpm2.HandleOwner, handle, k.handle)
+	// prepare attestation
+	opts := client.AttestOpts{
+		Nonce: append(buf, pubB...),
+	}
+	key, err := client.GceAttestationKeyECC(tpmConn)
 	if err != nil {
-		return fmt.Errorf("failed to persist key: %w", err)
+		log.Printf("[tpm] failed loading gce key, attempting standard attestation key...")
+		key, err = client.AttestationKeyECC(tpmConn)
+	}
+	if err != nil {
+		log.Printf("[tpm] attestation key not available: %s", err)
+		return nil, fmt.Errorf("failed loading attestation key: %w", err)
+	}
+	res, err := key.Attest(opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to attest: %w", err)
 	}
 
-	return nil
+	return json.Marshal(res)
 }

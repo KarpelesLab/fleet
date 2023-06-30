@@ -13,7 +13,6 @@ import (
 
 	"github.com/google/go-tpm-tools/simulator"
 	"github.com/google/go-tpm/legacy/tpm2"
-	"github.com/google/go-tpm/tpmutil"
 )
 
 func TestTpm(t *testing.T) {
@@ -31,9 +30,11 @@ func TestTpm(t *testing.T) {
 		log.Printf("Failed to get manufacturer: %s", err)
 	}
 
-	ktest := &tpmKey{
-		rwc:    sim,
-		handle: tpmutil.Handle(0x81010001),
+	tpmConn = sim
+	ktest, err := getTpmKey()
+	if err != nil {
+		t.Fatalf("failed to generate key: %s", err)
+		return
 	}
 
 	// get public key
