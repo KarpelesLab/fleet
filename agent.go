@@ -1084,8 +1084,6 @@ func (a *Agent) copyMeta() map[string]any {
 // Settings fetches the current settings from the global system and returns these
 // if the system is initializing, this will block until initialization is done
 func (a *Agent) Settings() (map[string]any, error) {
-	a.WaitReady()
-
 	// attempt to load settings
 	v, err := a.dbFleetLoad("settings:json")
 	if err != nil {
