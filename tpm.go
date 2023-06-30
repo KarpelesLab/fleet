@@ -32,10 +32,7 @@ type ecdsaSignature struct {
 
 func (a *Agent) getTpmKey() (crypto.Signer, error) {
 	// the default paths on Linux (/dev/tpmrm0 then /dev/tpm0), will be used
-	rwc, err := tpm2.OpenTPM("/dev/tpmrm0")
-	if err != nil {
-		rwc, err = tpm2.OpenTPM("/dev/tpm0")
-	}
+	rwc, err := tpm2open()
 	if err != nil {
 		return nil, err
 	}
