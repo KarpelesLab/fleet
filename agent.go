@@ -937,12 +937,6 @@ func (a *Agent) DumpInfo(w io.Writer) {
 	if tk := tpmKeyObject; tk != nil {
 		// we have a tpm key
 		fmt.Fprintf(w, "TPM key:    YES\n")
-		attest, err := tk.Attest()
-		if err == nil {
-			fmt.Fprintf(w, "TPM Attest: %s\n", attest)
-		} else {
-			fmt.Fprintf(w, "TPM Attest: failed=%s\n", err)
-		}
 	}
 	fmt.Fprintf(w, "\n")
 
