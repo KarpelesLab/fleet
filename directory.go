@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"runtime/debug"
@@ -29,7 +30,8 @@ type directoryPeer struct {
 	Name     string // "jp001"
 	Version  string // "20211010151149/8fed26f"
 	Location string
-	IP       string
+	IP       string   // public ip as seen by directory
+	AltIPs   []string // alternative local IPs reported by peer
 	Port     int
 	Private  *directoryPrivate
 }
@@ -160,6 +162,7 @@ func (a *Agent) jwtPingDirectory(dir string, jwt []byte, client *http.Client) er
 		"Location": a.division,
 		"Version":  goupd.CHANNEL + "/" + goupd.DATE_TAG + "/" + goupd.GIT_TAG,
 		"Time":     time.Now().UnixMicro(), // in ms
+		"AltIPs":   getLocalIPs(),
 		"Port":     a.port,
 		"Private": &directoryPrivate{
 			Id:       a.id,
@@ -214,4 +217,21 @@ func (a *Agent) jwtPingDirectory(dir string, jwt []byte, client *http.Client) er
 	}
 
 	return nil
+}
+
+func getLocalIPs() []string {
+	var res []string
+
+	ifaces, _ := net.Interfaces()
+	for _, i := range ifaces {
+		if i.Flags&net.FlagLoopback == net.FlagLoopback {
+			// ignore loopback interfaces
+			continue
+		}
+		addrs, _ := i.Addrs()
+		for _, addr := range addrs {
+			res = append(res, addr.String())
+		}
+	}
+	return res
 }
