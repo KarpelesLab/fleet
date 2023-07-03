@@ -10,9 +10,11 @@ import (
 	"time"
 )
 
-func formatAltAddrs(addrs []string, port int) []string {
+func formatAltAddrs(host string, addrs []string, port int) []string {
 	// transform CIDR addrs into addr:port
-	res := make([]string, 0, len(addrs))
+	res := make([]string, 0, len(addrs)+1)
+
+	addrs = append(addrs, "!"+host) // initial ! means we need to wait a bit before connecting
 
 	for _, a := range addrs {
 		pos := strings.LastIndexByte(a, '/')
@@ -47,6 +49,10 @@ func tlsDialAll(ctx context.Context, timeout time.Duration, addr []string, cfg *
 
 	for _, a := range addr {
 		go func(a string) {
+			if len(a) > 0 && a[0] == '!' {
+				a = a[1:]
+				time.Sleep(time.Second) // sleep 1s
+			}
 			c, err := d.DialContext(ctx, "tcp", a)
 			if err != nil {
 				select {

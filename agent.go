@@ -852,7 +852,7 @@ func (a *Agent) dialPeer(host string, port int, name string, id string, alt []st
 	// handle alt IPs and try these first
 	if len(alt) > 0 {
 		// typically alt ips are in the CIDR format, we want to re-format these as host:port
-		c, err := tlsDialAll(context.Background(), 5*time.Second, formatAltAddrs(alt, port), cfg)
+		c, err := tlsDialAll(context.Background(), 5*time.Second, formatAltAddrs(host, alt, port), cfg)
 		if err == nil {
 			// success!
 			go a.newConn(c, false)
