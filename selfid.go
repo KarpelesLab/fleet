@@ -58,7 +58,7 @@ func (a *Agent) performGoogleSelfId() error {
 		return err
 	}
 	// data is a jwt token on a single line, no linebreak
-	_, err = a.GetFile(a, "selfauth/google/"+string(data))
+	_, err = a.GetFile(a, "selfid/google/"+string(data))
 
 	// if file fetch succeeded, it means this instance has been connected to the appropriate host
 	// if not, it means failure
