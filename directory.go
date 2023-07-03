@@ -213,7 +213,7 @@ func (a *Agent) jwtPingDirectory(dir string, jwt []byte, client *http.Client) er
 		if a.IsConnected(peer.Private.Id) {
 			continue
 		}
-		go a.dialPeer(peer.IP, peer.Port, peer.Name, peer.Private.Id)
+		go a.dialPeer(peer.IP, peer.Port, peer.Name, peer.Private.Id, peer.AltIPs)
 	}
 
 	return nil

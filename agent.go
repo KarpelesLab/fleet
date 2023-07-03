@@ -828,7 +828,7 @@ func (a *Agent) handleRpcResponse(pkt *PacketRpcResponse) error {
 	}
 }
 
-func (a *Agent) dialPeer(host string, port int, name string, id string) {
+func (a *Agent) dialPeer(host string, port int, name string, id string, alt []string) {
 	if id == a.id {
 		// avoid connect to self
 		return
@@ -838,7 +838,7 @@ func (a *Agent) dialPeer(host string, port int, name string, id string) {
 	}
 
 	// random delay before connect
-	time.Sleep(time.Duration(rand.Intn(1500)+2000) * time.Millisecond)
+	time.Sleep(time.Duration(rand.Intn(1500)+200) * time.Millisecond)
 
 	// check if already connected
 	if a.IsConnected(id) {
@@ -848,6 +848,11 @@ func (a *Agent) dialPeer(host string, port int, name string, id string) {
 	cfg := a.outCfg.Clone()
 	cfg.ServerName = id
 	cfg.NextProtos = []string{"fssh", "fbin"}
+
+	// TODO handle alt IPs and try these first
+	if len(alt) > 0 {
+		log.Printf("[fleet] Peer %s report extra alt ips to be tested: %v", name, alt)
+	}
 
 	c, err := tls.Dial("tcp", host+":"+strconv.FormatInt(int64(port), 10), cfg)
 	if err != nil {

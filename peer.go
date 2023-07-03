@@ -278,7 +278,7 @@ func (p *Peer) handleSshChans(chans <-chan ssh.NewChannel) {
 
 func (p *Peer) retryLater(t time.Duration) {
 	time.Sleep(t)
-	p.a.dialPeer(p.addr.IP.String(), p.addr.Port, p.name, p.id)
+	p.a.dialPeer(p.addr.IP.String(), p.addr.Port, p.name, p.id, nil)
 }
 
 func (p *Peer) loop() {
