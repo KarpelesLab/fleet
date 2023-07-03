@@ -849,9 +849,16 @@ func (a *Agent) dialPeer(host string, port int, name string, id string, alt []st
 	cfg.ServerName = id
 	cfg.NextProtos = []string{"fssh", "fbin"}
 
-	// TODO handle alt IPs and try these first
+	// handle alt IPs and try these first
 	if len(alt) > 0 {
-		log.Printf("[fleet] Peer %s report extra alt ips to be tested: %v", name, alt)
+		// typically alt ips are in the CIDR format, we want to re-format these as host:port
+		c, err := tlsDialAll(context.Background(), 5*time.Second, formatAltAddrs(alt, port), cfg)
+		if err == nil {
+			// success!
+			go a.newConn(c, false)
+			return
+		}
+		log.Printf("[fleet] Alt connection failed, will attempt regular connection: %s", err)
 	}
 
 	c, err := tls.Dial("tcp", host+":"+strconv.FormatInt(int64(port), 10), cfg)
