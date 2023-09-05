@@ -63,6 +63,8 @@ func (a *Agent) getLocalKey() (crypto.Signer, error) {
 }
 
 // KeyShake128 uses PKCS8 private key blob as hash key
+//
+// Deprecated: won't work with TPM machines
 func (a *Agent) KeyShake128(N []byte) (sha3.ShakeHash, error) {
 	keyPem, err := a.dbFleetGet("internal_key:key")
 	if err != nil {
@@ -89,6 +91,8 @@ func (a *Agent) KeyShake128(N []byte) (sha3.ShakeHash, error) {
 }
 
 // KeySha256 uses PKCS8 private key blob as hash key
+//
+// Deprecated: won't work with TPM machines
 func (a *Agent) KeyShake256(N []byte) (sha3.ShakeHash, error) {
 	keyPem, err := a.dbFleetGet("internal_key:key")
 	if err != nil {
