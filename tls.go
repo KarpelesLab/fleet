@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/sha3"
 )
 
 func (a *Agent) getLocalKey() (crypto.Signer, error) {
@@ -59,6 +60,58 @@ func (a *Agent) getLocalKey() (crypto.Signer, error) {
 	}
 	// should not happen
 	return nil, fmt.Errorf("failed to convert key type %T into crypto.Signer", keyIntf)
+}
+
+// KeyShake128 uses PKCS8 private key blob as hash key
+func (a *Agent) KeyShake128(N []byte) (sha3.ShakeHash, error) {
+	keyPem, err := a.dbFleetGet("internal_key:key")
+	if err != nil {
+		// call getLocalKey() to generate key
+		_, err := a.getLocalKey()
+		if err != nil {
+			return nil, err
+		}
+		keyPem, err = a.dbFleetGet("internal_key:key")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// decode PEM key
+	pdata, _ := pem.Decode(keyPem)
+	if pdata == nil || pdata.Type != "PRIVATE KEY" {
+		return nil, errors.New("invalid private key in internal_key:key")
+	}
+
+	v := sha3.NewCShake128(N, pdata.Bytes)
+
+	return v, nil
+}
+
+// KeySha256 uses PKCS8 private key blob as hash key
+func (a *Agent) KeyShake256(N []byte) (sha3.ShakeHash, error) {
+	keyPem, err := a.dbFleetGet("internal_key:key")
+	if err != nil {
+		// call getLocalKey() to generate key
+		_, err := a.getLocalKey()
+		if err != nil {
+			return nil, err
+		}
+		keyPem, err = a.dbFleetGet("internal_key:key")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// decode PEM key
+	pdata, _ := pem.Decode(keyPem)
+	if pdata == nil || pdata.Type != "PRIVATE KEY" {
+		return nil, errors.New("invalid private key in internal_key:key")
+	}
+
+	v := sha3.NewCShake256(N, pdata.Bytes)
+
+	return v, nil
 }
 
 func (a *Agent) GenInternalCert() (tls.Certificate, error) {
