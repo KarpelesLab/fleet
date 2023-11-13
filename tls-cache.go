@@ -21,7 +21,7 @@ type crtCache struct {
 
 func (c *crtCache) GetClientCertificate(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
 	crt, err := c.GetCertificate(nil)
-	if err != nil {
+	if err != nil || crt == nil {
 		// error happened, but we don't care, let's just try without certificate.
 		// Go documentation: GetClientCertificate must return non-nil
 		return &tls.Certificate{}, nil
