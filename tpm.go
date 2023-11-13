@@ -9,7 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"math/big"
 	"sync"
 	"time"
@@ -126,16 +126,16 @@ func (k *tpmKey) Attest() ([]byte, error) {
 	nonce := buf // append(buf, pubB...)
 	_ = pubB
 
-	log.Printf("preparing to attest nonce=%x", nonce)
+	slog.Debug(fmt.Sprintf("preparing to attest nonce=%x", nonce), "event", "fleet:tpm:prep")
 
 	// prepare attestation
 	key, err := client.GceAttestationKeyECC(tpmConn)
 	if err != nil {
-		log.Printf("[tpm] failed loading gce key, attempting standard attestation key...")
+		slog.Warn(fmt.Sprintf("[tpm] failed loading gce key, attempting standard attestation key..."), "event", "fleet:tpm:gce_fail")
 		key, err = client.AttestationKeyECC(tpmConn)
 	}
 	if err != nil {
-		log.Printf("[tpm] attestation key not available: %s", err)
+		slog.Error(fmt.Sprintf("[tpm] attestation key not available: %s", err), "event", "fleet:tpm:attest_fail")
 		return nil, fmt.Errorf("failed loading attestation key: %w", err)
 	}
 	res, err := key.Attest(client.AttestOpts{Nonce: nonce})

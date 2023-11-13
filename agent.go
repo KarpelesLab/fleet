@@ -9,7 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"math/rand"
 	"net"
 	"net/http"
@@ -24,7 +24,6 @@ import (
 
 	"github.com/KarpelesLab/jwt"
 	"github.com/KarpelesLab/rchan"
-	"github.com/KarpelesLab/ringbuf"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -58,9 +57,6 @@ type Agent struct {
 	status     int // 0=waiting 1=ready
 	statusLock sync.RWMutex
 	statusCond *sync.Cond
-
-	// log
-	logbuf *ringbuf.Writer
 
 	// DB
 	db          *bolt.DB
@@ -129,7 +125,6 @@ func spawn() *Agent {
 
 func (a *Agent) start() {
 	// perform various start actions
-	a.initLog()
 	a.initPath()
 	a.initDb()
 	a.initSeed()
@@ -146,7 +141,6 @@ func closeAgentect(a *Agent) {
 
 func (a *Agent) Close() {
 	a.shutdownDb()
-	a.shutdownLog()
 }
 
 func (a *Agent) GetStatus() int {
@@ -214,13 +208,13 @@ func (a *Agent) doInit(token *jwt.Token) (err error) {
 	if a.socket == nil {
 		sock, err := net.ListenTCP("tcp", &net.TCPAddr{Port: a.port})
 		if err != nil {
-			log.Printf("[agent] failed to listen: %s", err)
+			slog.Error(fmt.Sprintf("[agent] failed to listen: %s", err), "event", "fleet:agent:listen_fail")
 			return err
 		}
 		// update a.port (will be the same value if it wasn't 0)
 		a.port = sock.Addr().(*net.TCPAddr).Port
 		a.socket = tls.NewListener(sock, a.inCfg)
-		log.Printf("[agent] Listening on :%d", a.port)
+		slog.Debug(fmt.Sprintf("[agent] Listening on :%d", a.port), "event", "fleet:agent:listen")
 	}
 
 	// create a transport object for http queries
@@ -656,7 +650,7 @@ func (a *Agent) RpcSend(ctx context.Context, id string, endpoint string, data []
 
 	_, _, err := p.ssh.SendRequest("rpc/"+endpoint, false, data)
 	if err != nil {
-		log.Printf("[fleet] failed sending RPC packet to peer %s: %s", p.name, err)
+		slog.Warn(fmt.Sprintf("[fleet] failed sending RPC packet to peer %s: %s", p.name, err), "event", "fleet:rpc:sendfail")
 	}
 	return err
 }
@@ -858,12 +852,12 @@ func (a *Agent) dialPeer(host string, port int, name string, id string, alt []st
 			go a.newConn(c, false)
 			return
 		}
-		log.Printf("[fleet] Alt connection failed, will attempt regular connection: %s", err)
+		slog.Debug(fmt.Sprintf("[fleet] Alt connection failed, will attempt regular connection: %s", err), "event", "fleet:agent:altfail")
 	}
 
 	c, err := tls.Dial("tcp", host+":"+strconv.FormatInt(int64(port), 10), cfg)
 	if err != nil {
-		log.Printf("[fleet] failed to connect to peer %s(%s): %s", name, id, err)
+		slog.Warn(fmt.Sprintf("[fleet] failed to connect to peer %s(%s): %s", name, id, err), "event", "fleet:agent:conn_fail")
 		return
 	}
 
@@ -885,7 +879,7 @@ func (a *Agent) listenLoop() {
 	for {
 		conn, err := a.socket.Accept()
 		if err != nil {
-			log.Printf("[fleet] failed to accept connections: %s", err)
+			slog.Error(fmt.Sprintf("[fleet] failed to accept connections: %s", err), "event", "fleet:agent:accept_fail")
 			return
 		}
 
@@ -932,7 +926,7 @@ func (a *Agent) doAnnounce() {
 			defer wg.Done()
 			err := p.Send(ctx, pkt)
 			if err != nil {
-				log.Printf("[agent] failed to send announce to %s: %s", p.id, err)
+				slog.Warn(fmt.Sprintf("[agent] failed to send announce to %s: %s", p.id, err), "event", "fleet:agent:announce_fail")
 			}
 		}(p)
 	}
@@ -1048,7 +1042,7 @@ func (a *Agent) handleAnnounce(ann *PacketAnnounce, fromPeer *Peer) error {
 	if p == nil {
 		// need to establish link
 		//go a.dialPeer(ann.Ip, "", ann.Id)
-		log.Printf("[agent] failed to process announce from %s (no such peer)", ann.Id)
+		slog.Warn(fmt.Sprintf("[agent] failed to process announce from %s (no such peer)", ann.Id), "event", "fleet:agent:igress_announce_no_peer")
 		return nil
 	}
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 )
 
 // RpcEndpoint represents a callback function for the legacy RPC system
@@ -57,7 +57,7 @@ func SetRpcEndpoint(e string, f RpcEndpoint) {
 func CallRpcEndpoint(e string, p any) (res any, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("[fleet] Panic in RPC %s: %s", e, r)
+			slog.Error(fmt.Sprintf("[fleet] Panic in RPC %s: %s", e, r), "event", "fleet:rpc:panic", "category", "go.panic")
 			err = fmt.Errorf("rpc call panic recovered: %s", r)
 		}
 	}()

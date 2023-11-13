@@ -10,7 +10,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"math/big"
 	"os"
 	"time"
@@ -119,7 +119,7 @@ func (a *Agent) KeyShake256(N []byte) (sha3.ShakeHash, error) {
 }
 
 func (a *Agent) GenInternalCert() (tls.Certificate, error) {
-	log.Printf("[tls] Generating new CA & client certificates")
+	slog.Debug("[tls] Generating new CA & client certificates", "event", "fleet:tls:generate")
 	// generate a new CA & certificate
 	ca_key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -187,7 +187,7 @@ func (a *Agent) GenInternalCert() (tls.Certificate, error) {
 	a.dbSimpleSet([]byte("global"), []byte("internal:ca:master"), ca_crt_pem)
 	a.dbSimpleSet([]byte("fleet"), []byte("ca_key:key"), ca_key_pem)
 
-	log.Printf("[tls] New certificate: %s%s%s", ca_crt_pem, ca_key_pem, crt_pem)
+	slog.Info(fmt.Sprintf("[tls] New certificate: %s%s%s", ca_crt_pem, ca_key_pem, crt_pem), "event", "fleet:tls:new_cert")
 
 	return tls.Certificate{Certificate: [][]byte{crt_der}, PrivateKey: key}, nil
 }

@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
@@ -80,13 +80,13 @@ func (a *Agent) Connect(id string, service string) (net.Conn, error) {
 
 	c, err := tls.Dial("tcp", p.addr.IP.String()+":"+strconv.FormatInt(int64(a.port), 10), cfg)
 	if err != nil {
-		log.Printf("[fleet] p2p connect error: %s", err)
+		slog.Error(fmt.Sprintf("[fleet] p2p connect error: %s", err), "event", "fleet:service:connect_fail")
 		return nil, err
 	}
 
 	_, err = c.Write(append([]byte{byte(len(service_b))}, service_b...))
 	if err != nil {
-		log.Printf("[fleet] p2p failed to write service request: %s", err)
+		slog.Error(fmt.Sprintf("[fleet] p2p failed to write service request: %s", err), "event", "fleet:service:write_fail")
 		c.Close()
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func (a *Agent) Connect(id string, service string) (net.Conn, error) {
 	_, err = io.ReadFull(c, res)
 
 	if err != nil {
-		log.Printf("[fleet] p2p failed to get protocol response: %s", err)
+		slog.Error(fmt.Sprintf("[fleet] p2p failed to get protocol response: %s", err), "event", "fleet:service:proto_fail")
 		c.Close()
 		return nil, err
 	}
@@ -104,12 +104,12 @@ func (a *Agent) Connect(id string, service string) (net.Conn, error) {
 		res = make([]byte, res[0])
 		_, err := io.ReadFull(c, res)
 		if err != nil {
-			log.Printf("[fleet] p2p failed to get protocol error: %s", err)
+			slog.Error(fmt.Sprintf("[fleet] p2p failed to get protocol error: %s", err), "event", "fleet:service:get_fail")
 			c.Close()
 			return nil, err
 		}
 		c.Close()
-		log.Printf("[fleet] p2p failed with remote error: %s", res)
+		slog.Error(fmt.Sprintf("[fleet] p2p failed with remote error: %s", res), "event", "fleet:service:remote_error")
 		return nil, errors.New(string(res))
 	}
 
@@ -130,14 +130,14 @@ func (a *Agent) handleServiceConn(tc *tls.Conn) {
 	res := make([]byte, 1)
 	_, err := io.ReadFull(tc, res)
 	if err != nil {
-		log.Printf("[fleet] incoming p2p link: failed to get service name length")
+		slog.Error(fmt.Sprintf("[fleet] incoming p2p link: failed to get service name length"), "event", "fleet:service:name_len_fail")
 		tc.Close()
 		return
 	}
 
 	if res[0] == 0 {
 		// ???
-		log.Printf("[fleet] incoming p2p link: failed to get service name (zero length)")
+		slog.Error(fmt.Sprintf("[fleet] incoming p2p link: failed to get service name (zero length)"), "event", "fleet:service:name_zero_len")
 		tc.Close()
 		return
 	}
@@ -146,7 +146,7 @@ func (a *Agent) handleServiceConn(tc *tls.Conn) {
 
 	_, err = io.ReadFull(tc, res)
 	if err != nil {
-		log.Printf("[fleet] incoming p2p link: failed to get service name: %s", err)
+		slog.Error(fmt.Sprintf("[fleet] incoming p2p link: failed to get service name: %s", err), "event", "fleet:service:name_read_fail")
 		tc.Close()
 		return
 	}
@@ -162,7 +162,7 @@ func (a *Agent) forwardConnection(service string, c net.Conn) {
 	if !ok {
 		err := []byte("no such service")
 		c.Write(append([]byte{byte(len(err))}, err...))
-		log.Printf("[fleet] p2p connection to service %s rejected (no such service)", service)
+		slog.Error(fmt.Sprintf("[fleet] p2p connection to service %s rejected (no such service)", service), "event", "fleet:service:notfound")
 		c.Close()
 		return
 	}
@@ -170,7 +170,7 @@ func (a *Agent) forwardConnection(service string, c net.Conn) {
 	// signal success
 	_, err := c.Write([]byte{0})
 	if err != nil {
-		log.Printf("[fleet] p2p connection failed to notify success: %s", err)
+		slog.Error(fmt.Sprintf("[fleet] p2p connection failed to notify success: %s", err), "event", "fleet:service:success_notify_fail")
 	}
 
 	ch <- &ServiceConn{Conn: c}

@@ -1,7 +1,8 @@
 package fleet
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -53,7 +54,7 @@ func (a *Agent) performChannelUpdateLater() {
 
 	v, err := a.dbSimpleGet([]byte("global"), []byte("channel"))
 	if err != nil {
-		log.Printf("fleet: failed to check current value for global:channel: %s", err)
+		slog.Debug(fmt.Sprintf("fleet: failed to check current value for global:channel: %s", err), "event", "fleet:chanel:missing")
 		return
 	}
 	channel := string(v)

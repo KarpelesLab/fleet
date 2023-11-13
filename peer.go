@@ -10,7 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"os"
 	"strings"
@@ -55,7 +55,7 @@ type Peer struct {
 func (a *Agent) newConn(c net.Conn, incoming bool) {
 	tc, ok := c.(*tls.Conn)
 	if !ok {
-		log.Printf("[fleet] non-tls connection recieved?")
+		slog.Error(fmt.Sprintf("[fleet] non-tls connection recieved?"), "event", "fleet:peer:non_tls")
 		c.Close()
 		return
 	}
@@ -63,7 +63,7 @@ func (a *Agent) newConn(c net.Conn, incoming bool) {
 	// make sure handshake has completed
 	err := tc.Handshake()
 	if err != nil {
-		log.Printf("[fleet] handshake failed with peer %s: %s", tc.RemoteAddr(), err)
+		slog.Warn(fmt.Sprintf("[fleet] handshake failed with peer %s: %s", tc.RemoteAddr(), err), "event", "fleet:peer:tls_handshake_fail")
 		tc.Close()
 		return
 	}
@@ -80,7 +80,7 @@ func (a *Agent) newConn(c net.Conn, incoming bool) {
 		return
 	default:
 		tc.Close()
-		log.Printf("[fleet] invalid protocol in connection handshake")
+		slog.Warn(fmt.Sprintf("[fleet] invalid protocol %s in connection handshake", tc.ConnectionState().NegotiatedProtocol), "event", "fleet:peer:invalid_proto")
 	}
 }
 
@@ -105,17 +105,17 @@ func (a *Agent) handleFleetConn(tc *tls.Conn) {
 	}
 	err := p.fetchUuidFromCertificate(tc)
 	if err != nil {
-		log.Printf("[fleet] failed to get peer id: %s", err)
+		slog.Error(fmt.Sprintf("[fleet] failed to get peer id: %s", err), "event", "fleet:peer:tls_peer_id_missing")
 		p.c.Close()
 		return
 	}
 	if p.id == a.id {
-		log.Printf("[fleet] connected to self, closing")
+		slog.Debug("[fleet] connected to self, closing", "event", "fleet:peer:talking_to_self")
 		p.c.Close()
 		return
 	}
 
-	log.Printf("[fleet] Connection with peer %s(%s) established", p.name, p.id)
+	slog.Debug(fmt.Sprintf("[fleet] Connection with peer %s(%s) established", p.name, p.id), "event", "fleet:peer:connected")
 
 	go p.sendHandshake(context.Background()) // will disappear
 	go p.register()
@@ -139,12 +139,12 @@ func (a *Agent) handleFleetSsh(tc *tls.Conn, incoming bool) {
 	}
 	err := p.fetchUuidFromCertificate(tc)
 	if err != nil {
-		log.Printf("[fleet] failed to get peer id: %s", err)
+		slog.Warn(fmt.Sprintf("[fleet] failed to get peer id: %s", err), "event", "fleet:peer:tls_peerid_missing")
 		tc.Close()
 		return
 	}
 	if p.id == a.id {
-		log.Printf("[fleet] connected to self, closing")
+		slog.Debug(fmt.Sprintf("[fleet] connected to self, closing"), "event", "fleet:peer:talking_to_self")
 		tc.Close()
 		return
 	}
@@ -163,10 +163,10 @@ func (a *Agent) handleFleetSsh(tc *tls.Conn, incoming bool) {
 			if s, err := ssh.NewSignerFromKey(k); err == nil {
 				cfg.AddHostKey(s)
 			} else {
-				log.Printf("[fleet] SSH server signer failed: %s", err)
+				slog.Error(fmt.Sprintf("[fleet] SSH server signer failed: %s", err), "event", "fleet:peer:ssh_signer_fail")
 			}
 		} else {
-			log.Printf("[fleet] failed to fetch host private key: %s", err)
+			slog.Error(fmt.Sprintf("[fleet] failed to fetch host private key: %s", err), "event", "fleet:peer:privkey_fail")
 		}
 		p.ssh, chans, reqs, err = ssh.NewServerConn(tc, cfg)
 	} else {
@@ -181,12 +181,12 @@ func (a *Agent) handleFleetSsh(tc *tls.Conn, incoming bool) {
 		p.ssh, chans, reqs, err = ssh.NewClientConn(tc, p.id, cfg)
 	}
 	if err != nil {
-		log.Printf("[fleet] SSH connection failed: %s", err)
+		slog.Error(fmt.Sprintf("[fleet] SSH connection failed: %s", err), "event", "fleet:peer:ssh_fail")
 		tc.Close()
 		return
 	}
 
-	log.Printf("[fleet] SSH connection with peer %s(%s) established", p.name, p.id)
+	slog.Info(fmt.Sprintf("[fleet] SSH connection with peer %s(%s) established", p.name, p.id), "event", "fleet:peer:ssh_ok")
 
 	go p.handleSshRequests(reqs)
 	go p.handleSshChans(chans)
@@ -239,7 +239,7 @@ func (p *Peer) handleSshRequests(reqs <-chan *ssh.Request) {
 		}
 	}
 
-	log.Printf("[fleet] SSH connection is out of requests")
+	slog.Debug(fmt.Sprintf("[fleet] SSH connection is out of requests"), "event", "fleet:peer:ssh_req_eof")
 }
 
 func (p *Peer) handleSshChans(chans <-chan ssh.NewChannel) {
@@ -263,17 +263,17 @@ func (p *Peer) handleSshChans(chans <-chan ssh.NewChannel) {
 			}
 			nch, reqs, err := ch.Accept()
 			if err != nil {
-				log.Printf("[fleet] channel accept failed: %s", err)
+				slog.Error(fmt.Sprintf("[fleet] channel accept failed: %s", err), "event", "fleet:peer:accept_fail")
 			}
 			go ssh.DiscardRequests(reqs)
 			svc <- &quasiConn{Channel: nch, p: p}
 		default:
-			log.Printf("[fleet] rejecting channel request for %s", ch.ChannelType())
+			slog.Error(fmt.Sprintf("[fleet] rejecting channel request for %s", ch.ChannelType()), "event", "fleet:peer:channel_reject")
 			ch.Reject(ssh.UnknownChannelType, "unknown channel type")
 		}
 	}
 
-	log.Printf("[fleet] SSH connection is out of channels")
+	slog.Debug(fmt.Sprintf("[fleet] SSH connection is out of channels"), "event", "fleet:peer:ssh_chan_eof")
 }
 
 func (p *Peer) retryLater(t time.Duration) {
@@ -321,9 +321,9 @@ func (p *Peer) loop() {
 
 		if err != nil {
 			if err == io.EOF {
-				log.Printf("[fleet] disconnected peer %s(%s) (received EOF)", p.name, p.id)
+				slog.Info(fmt.Sprintf("[fleet] disconnected peer %s(%s) (received EOF)", p.name, p.id), "event", "fleet:peer:eof")
 			} else {
-				log.Printf("[fleet] failed to read from peer %s(%s): %s", p.name, p.id, err)
+				slog.Info(fmt.Sprintf("[fleet] failed to read from peer %s(%s): %s", p.name, p.id, err), "event", "fleet:peer:read_fail")
 			}
 
 			if p.valid {
@@ -365,7 +365,7 @@ func (p *Peer) handleBinary(pc uint16, data []byte) error {
 	case PacketLockRelease:
 		return p.a.handleLockRelease(p, data)
 	case PacketClose:
-		log.Printf("[fleet] Closing peer connection because: %s", data)
+		slog.Info(fmt.Sprintf("[fleet] Closing peer connection because: %s", data), "event", "fleet:peer:close_req")
 		return io.EOF
 	case PacketSeed:
 		if len(data) < 16 {
@@ -386,7 +386,7 @@ func (p *Peer) handleBinary(pc uint16, data []byte) error {
 			// custom packet
 			return callCustomHandler(p, pc, data)
 		} else {
-			log.Printf("[fleet] unknown packet received 0x%04x", pc)
+			slog.Warn(fmt.Sprintf("[fleet] unknown packet received 0x%04x", pc), "event", "fleet:peer:unknown_packet")
 		}
 	}
 	return nil
@@ -398,7 +398,7 @@ func (p *Peer) handleLegacy(data []byte) error {
 
 	err := dec.Decode(&pkt)
 	if err != nil {
-		log.Printf("notice: failed to decode gob: %s", err)
+		slog.Info(fmt.Sprintf("notice: failed to decode gob: %s", err), "event", "fleet:peer:gob_parse_fail")
 		return nil
 	}
 	return p.handlePacket(pkt)
@@ -595,7 +595,7 @@ func (p *Peer) writeLoop() {
 			v := DbStamp(now).Bytes()
 			err := p.WritePacket(context.Background(), PacketPing, v)
 			if err != nil {
-				log.Printf("[fleet] Write to peer failed: %s", err)
+				slog.Error(fmt.Sprintf("[fleet] Write to peer failed: %s", err), "event", "fleet:peer:write_fail")
 				return
 			}
 		}
@@ -640,7 +640,7 @@ func (p *Peer) WritePacket(ctx context.Context, pc uint16, data []byte) error {
 		pcBin := []byte{byte(pc >> 8), byte(pc)}
 		_, _, err := p.ssh.SendRequest("fbin", false, append(pcBin, data...))
 		if err != nil {
-			log.Printf("[fleet] WritePacket to %s via SSH failed: %s", p.name, err)
+			slog.Error(fmt.Sprintf("[fleet] WritePacket to %s via SSH failed: %s", p.name, err), "event", "fleet:peer:ssh_write_fail")
 		}
 		return err
 	}
@@ -658,7 +658,7 @@ func (p *Peer) WritePacket(ctx context.Context, pc uint16, data []byte) error {
 }
 
 func (p *Peer) Close(reason string) error {
-	log.Printf("[fleet] Closing connection to %s(%s): %s", p.name, p.id, reason)
+	slog.Info(fmt.Sprintf("[fleet] Closing connection to %s(%s): %s", p.name, p.id, reason), "event", "fleet:peer:close", "fleet:peer", p.id)
 	if p.ssh != nil {
 		return p.ssh.Close()
 	}

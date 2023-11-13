@@ -2,8 +2,9 @@ package fleet
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -19,10 +20,10 @@ func (a *Agent) initPath() {
 		}
 		c = filepath.Join(c, goupd.PROJECT_NAME)
 		if err := EnsureDir(c); err != nil {
-			log.Printf("[fleet] Failed to access cache directory: %s", err)
+			slog.Error(fmt.Sprintf("[fleet] Failed to access cache directory: %s", err), "event", "fleet:path:init_fail")
 			return
 		}
-		log.Printf("[fleet] set cache dir: %s", c)
+		slog.Debug(fmt.Sprintf("[fleet] set cache dir: %s", c), "event", "fleet:path:cachedir")
 		a.cache = c
 		os.Chdir(c)
 	}
@@ -80,18 +81,18 @@ func (a *Agent) getFile(filename string, cb func([]byte) error) error {
 
 	fn, err := findFile(filename)
 	if err != nil {
-		log.Printf("[fleet] Failed to locate %s: %s", filename, err)
+		slog.Error(fmt.Sprintf("[fleet] Failed to locate %s: %s", filename, err), "event", "fleet:path:getfile:notfound")
 		return err
 	}
-	log.Printf("[fleet] located file %s", fn)
+	slog.Debug(fmt.Sprintf("[fleet] located file %s", fn), "event", "fleet:path:getfile:located")
 	data, err := os.ReadFile(fn)
 	if err != nil {
-		log.Printf("[fleet] Failed to read %s: %s", filename, err)
+		slog.Warn(fmt.Sprintf("[fleet] Failed to read %s: %s", filename, err), "event", "fleet:path:getfile:read_fail")
 		return err
 	}
 	err = cb(data)
 	if err != nil {
-		log.Printf("[fleet] Failed to perform %s: %s", filename, err)
+		slog.Error(fmt.Sprintf("[fleet] Failed to perform %s: %s", filename, err), "event", "fleet:path:getfile:perform_fail")
 		return err
 	}
 	// only remove after success of callback

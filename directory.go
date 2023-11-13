@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -69,14 +69,14 @@ func (a *Agent) directoryThreadStart() bool {
 	defer func() {
 		// ensure this thread crashing doesn't take the whole process
 		if e := recover(); e != nil {
-			log.Printf("[fleet] directory thread panic'd, will retry later. Error: %s\n%s", e, debug.Stack())
+			slog.Error(fmt.Sprintf("[fleet] directory thread panic'd, will retry later. Error: %s\n%s", e, debug.Stack()), "event", "fleet:directory:panic", "category", "go.panic")
 		}
 	}()
 
 	// attempt to load jwt
 	jwtData, err := a.dbFleetGet("internal_key:jwt")
 	if err != nil {
-		log.Printf("[fleet] failed to load jwt: %s (will retry soon)", err)
+		slog.Info(fmt.Sprintf("[fleet] failed to load jwt: %s (will retry soon)", err), "event", "fleet:directory:no_jwt")
 		// attempt to get issuer to give us a key
 		err = a.performSelfIdentificationAttempt()
 		if err == nil {
@@ -84,7 +84,7 @@ func (a *Agent) directoryThreadStart() bool {
 			jwtData, err = a.dbFleetGet("internal_key:jwt")
 		}
 		if err != nil {
-			log.Printf("[fleet] failed to id: %s (will retry later)", err)
+			slog.Info(fmt.Sprintf("[fleet] failed to id: %s (will retry later)", err), "event", "fleet:directory:no_selfid")
 			return false
 		}
 	}
@@ -92,46 +92,46 @@ func (a *Agent) directoryThreadStart() bool {
 	// decode jwt
 	jwtInfo, err := jwt.ParseString(string(jwtData))
 	if err != nil {
-		log.Printf("[fleet] failed to decode jwt: %s", err)
+		slog.Error(fmt.Sprintf("[fleet] failed to decode jwt: %s", err), "event", "fleet:directory:jwt_invalid")
 		return false
 	}
 	// our tokens have the actual key stored in kid
 	key, err := base64.RawURLEncoding.DecodeString(jwtInfo.GetKeyId())
 	if err != nil {
-		log.Printf("[fleet] failed to decode kid: %s", err)
+		slog.Error(fmt.Sprintf("[fleet] failed to decode kid: %s", err), "event", "fleet:directory:jwt_kid_invalid")
 		return false
 	}
 	keyObj, err := x509.ParsePKIXPublicKey(key)
 	if err != nil {
-		log.Printf("[fleet] failed to parse jwt key: %s", err)
-		log.Printf("[fleet] removing invalid jwt from database")
+		slog.Error(fmt.Sprintf("[fleet] failed to parse jwt key: %s", err), "event", "fleet:directory:jwt_pkix_invalid")
+		slog.Info("[fleet] removing invalid jwt from database", "event", "fleet:directory:jwt_expunge")
 		a.dbFleetDel("internal_key:jwt")
 		return false
 	}
 	// keyObj is a *rsa.PublicKey, *dsa.PublicKey, *ecdsa.PublicKey, or ed25519.PublicKey
 	err = jwtInfo.Verify(jwt.VerifySignature(keyObj), jwt.VerifyTime(time.Now(), false))
 	if err != nil {
-		log.Printf("[fleet] failed to verify jwt: %s", err)
-		log.Printf("[fleet] removing invalid jwt from database")
+		slog.Error(fmt.Sprintf("[fleet] failed to verify jwt: %s", err), "event", "fleet:jwt:verify_fail")
+		slog.Info("[fleet] removing invalid jwt from database", "event", "fleet:directory:jwt_expunge")
 		a.dbFleetDel("internal_key:jwt")
 		return false
 	}
 
 	err = a.doInit(jwtInfo)
 	if err != nil {
-		log.Printf("[agent] failed to init agent: %s", err)
+		slog.Warn(fmt.Sprintf("[agent] failed to init agent: %s", err), "event", "fleet:directory:agent_init_fail")
 	}
 
 	dir := jwtInfo.Payload().GetString("aud") // Audience
 	if dir == "" {
-		log.Printf("[fleet] directory failed to load: aud claim not found")
+		slog.Error("[fleet] directory failed to load: aud claim not found", "event", "fleet:directory:aud_missing")
 		return false
 	}
 
 	// jwt contains our jwt token, load the certificate too
 	cfg, err := a.GetClientTlsConfig()
 	if err != nil {
-		log.Printf("[fleet] failed to get client TLS certificate, directory service disabled: %s", err)
+		slog.Error(fmt.Sprintf("[fleet] failed to get client TLS certificate, directory service disabled: %s", err), "event", "fleet:directory:tls_fail")
 		return false
 	}
 
@@ -149,7 +149,7 @@ func (a *Agent) directoryThreadStart() bool {
 			// connect to directory, ping, etc
 			err = a.jwtPingDirectory(dir, jwtData, client)
 			if err != nil {
-				log.Printf("[fleet] ping failed: %s", err)
+				slog.Warn(fmt.Sprintf("[fleet] ping failed: %s", err), "event", "fleet:directory:ping_fail")
 			}
 			time.Sleep(60 * time.Second)
 		}

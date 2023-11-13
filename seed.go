@@ -11,7 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -49,7 +49,7 @@ func (a *Agent) initSeed() {
 		if t.UnmarshalBinary(d[128:]) == nil {
 			// managed to read time too!
 			a.seed = makeSeed(d[:128], t)
-			log.Printf("[fleet] Initialized with saved cluster seed ID = %s", a.SeedId())
+			slog.Debug(fmt.Sprintf("[fleet] Initialized with saved cluster seed ID = %s", a.SeedId()), "event", "fleet:seed:init")
 			return
 		}
 	}
@@ -69,7 +69,7 @@ func (a *Agent) initSeed() {
 				if t.UnmarshalBinary(tsBin) == nil {
 					// managed to read time too!
 					a.seed = makeSeed(s, t)
-					log.Printf("[fleet] Initialized with saved cluster seed ID = %s", a.SeedId())
+					slog.Debug(fmt.Sprintf("[fleet] Initialized with saved cluster seed ID = %s", a.SeedId()), "event", "fleet:seed:init")
 					if a.seed.WriteToDisk(a) == nil {
 						os.Remove("fleet_seed.bin")
 					}
@@ -87,7 +87,7 @@ func (a *Agent) initSeed() {
 	a.seed = makeSeed(s, time.Now())
 	a.seed.WriteToDisk(a)
 
-	log.Printf("[fleet] Initialized with cluster seed ID = %s", a.SeedId())
+	slog.Debug(fmt.Sprintf("[fleet] Initialized with cluster seed ID = %s", a.SeedId()), "event", "fleet:seed:new")
 }
 
 func (a *Agent) SeedId() uuid.UUID {
@@ -201,6 +201,6 @@ func (a *Agent) handleNewSeed(s []byte, t time.Time) error {
 	}
 	a.seed = makeSeed(s, t)
 	a.seed.WriteToDisk(a)
-	log.Printf("[fleet] Updated seed from peer, new seed ID = %s", a.SeedId())
+	slog.Info(fmt.Sprintf("[fleet] Updated seed from peer, new seed ID = %s", a.SeedId()), "event", "fleet:seed:update")
 	return nil
 }

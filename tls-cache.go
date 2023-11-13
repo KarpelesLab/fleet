@@ -5,7 +5,8 @@ import (
 	"crypto/tls"
 	"encoding/pem"
 	"errors"
-	"log"
+	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -43,7 +44,7 @@ func (c *crtCache) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error
 
 	c.crt, c.err = c.loadCert()
 	if c.err != nil {
-		log.Printf("[tls] Failed to fetch %s certificate: %s", c.k, c.err)
+		slog.Warn(fmt.Sprintf("[tls] Failed to fetch %s certificate: %s", c.k, c.err), "event", "fleet:tls:fetch_fail")
 	}
 
 	return c.crt, c.err
@@ -71,7 +72,7 @@ func (c *crtCache) PrivateKey() (crypto.PrivateKey, error) {
 
 	c.crt, c.err = c.loadCert()
 	if c.err != nil {
-		log.Printf("[tls] Failed to fetch %s certificate: %s", c.k, c.err)
+		slog.Warn(fmt.Sprintf("[tls] Failed to fetch %s certificate: %s", c.k, c.err), "event", "fleet:tls:fetch_fail")
 	}
 
 	if c.err != nil {

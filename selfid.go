@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 )
@@ -18,7 +17,7 @@ func (a *Agent) performSelfIdentificationAttempt() error {
 	if err := a.performGoogleSelfId(); err == nil {
 		return nil
 	} else {
-		log.Printf("[directory] self auth via google failed: %s", err)
+		//log.Printf("[directory] self auth via google failed: %s", err)
 	}
 	return errors.New("self-identification was not successful")
 }

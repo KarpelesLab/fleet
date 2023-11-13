@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -98,7 +98,7 @@ func (l *globalLock) release() {
 }
 
 func (l *globalLock) broadcastRelease() {
-	log.Printf("[fleet] releasing lock %s %d %s", l.name, l.t, l.owner)
+	slog.Debug(fmt.Sprintf("[fleet] releasing lock %s %d %s", l.name, l.t, l.owner), "event", "fleet:lock:release")
 	if l.local {
 		// broadcast release
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -177,7 +177,7 @@ func (a *Agent) Lock(ctx context.Context, name string) (*LocalLock, error) {
 		return nil, ErrInvalidLockName
 	}
 
-	log.Printf("[fleet] Attempting to acquire lock %s", name)
+	slog.Debug(fmt.Sprintf("[fleet] Attempting to acquire lock %s", name), "event", "fleet:lock:acquiretry")
 	start := time.Now()
 
 	// first, let's check if this isn't already locked, if it is, wait
@@ -213,14 +213,14 @@ func (a *Agent) Lock(ctx context.Context, name string) (*LocalLock, error) {
 		lk.local = true
 		lk.lk.Unlock()
 
-		log.Printf("[fleet] Lock %s acquire attempt with t=%d", name, tm)
+		slog.Debug(fmt.Sprintf("[fleet] Lock %s acquire attempt with t=%d", name, tm), "event", "fleet:lock:attempt")
 
 		if a.GetPeersCount() <= 1 {
 			// we can't have global locks with no peers
 			lk.setStatus(1)
 			res := &LocalLock{lk: lk}
 			runtime.SetFinalizer(res, finalizeLocalLock)
-			log.Printf("[fleet] Lock %s acquired in %s (no other peers)", name, time.Since(start))
+			slog.Debug(fmt.Sprintf("[fleet] Lock %s acquired in %s (no other peers)", name, time.Since(start)), "event", "fleet:lock:acquire_solo")
 			return res, nil
 		}
 
@@ -249,19 +249,19 @@ func (a *Agent) Lock(ctx context.Context, name string) (*LocalLock, error) {
 					ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 					defer cancel()
 					a.BroadcastPacket(ctx, PacketLockConfirm, lk.Key())
-					log.Printf("[fleet] Lock %s acquired in %s", name, time.Since(start))
+					slog.Debug(fmt.Sprintf("[fleet] Lock %s acquired in %s", name, time.Since(start)), "event", "fleet:lock:acquire_success")
 					return res, nil
 				}
 				if st == 2 {
 					// reached too many nay or another lock confirmed on top of us
 					lk.release()
-					log.Printf("[fleet] Lock %s failed acquire, will retry", name)
+					slog.Debug(fmt.Sprintf("[fleet] Lock %s failed acquire, will retry", name), "event", "fleet:lock:acquire_fail")
 					break acqLoop
 				}
 			case <-timeout.C:
 				// reached timeout
 				lk.release()
-				log.Printf("[fleet] Lock %s acquire timed out, will retry", name)
+				slog.Debug(fmt.Sprintf("[fleet] Lock %s acquire timed out, will retry", name), "event", "fleet:lock:acquire_timeout")
 				break acqLoop
 			case <-ctx.Done():
 				lk.release()
