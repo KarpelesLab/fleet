@@ -79,8 +79,8 @@ func (a *Agent) newConn(c net.Conn, incoming bool) {
 		a.handleServiceConn(tc)
 		return
 	default:
-		tc.Close()
 		slog.Warn(fmt.Sprintf("[fleet] invalid protocol %s in connection handshake", tc.ConnectionState().NegotiatedProtocol), "event", "fleet:peer:invalid_proto")
+		tc.Close()
 	}
 }
 
@@ -625,6 +625,7 @@ func (p *Peer) writev(ctx context.Context, buf ...[]byte) (n int, err error) {
 		if serr != nil {
 			err = serr
 			if n > 0 {
+				slog.Error("partial write on writev(), closing connection", "event", "fleet:peer:error_partial_write", "fleet.peer", p.id)
 				p.c.Close() // close because that is a partial write
 			}
 			p.c.SetWriteDeadline(time.Time{})
@@ -640,7 +641,7 @@ func (p *Peer) WritePacket(ctx context.Context, pc uint16, data []byte) error {
 		pcBin := []byte{byte(pc >> 8), byte(pc)}
 		_, _, err := p.ssh.SendRequest("fbin", false, append(pcBin, data...))
 		if err != nil {
-			slog.Error(fmt.Sprintf("[fleet] WritePacket to %s via SSH failed: %s", p.name, err), "event", "fleet:peer:ssh_write_fail")
+			slog.Error(fmt.Sprintf("[fleet] WritePacket to %s via SSH failed: %s", p.name, err), "event", "fleet:peer:ssh_write_fail", "fleet.peer", p.id)
 		}
 		return err
 	}
@@ -658,7 +659,7 @@ func (p *Peer) WritePacket(ctx context.Context, pc uint16, data []byte) error {
 }
 
 func (p *Peer) Close(reason string) error {
-	slog.Info(fmt.Sprintf("[fleet] Closing connection to %s(%s): %s", p.name, p.id, reason), "event", "fleet:peer:close", "fleet:peer", p.id)
+	slog.Info(fmt.Sprintf("[fleet] Closing connection to %s(%s): %s", p.name, p.id, reason), "event", "fleet:peer:close", "fleet.peer", p.id)
 	if p.ssh != nil {
 		return p.ssh.Close()
 	}
@@ -680,6 +681,7 @@ func (p *Peer) register() {
 
 	old, ok := a.peers[p.id]
 	if ok && old != p {
+		slog.Info("dropping duplicate connection to peer", "event", "fleet:peer:err_dup", "fleet.peer", p.id)
 		go p.Close("already connected, dropping new connection")
 		return
 	}
