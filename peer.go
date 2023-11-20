@@ -31,6 +31,7 @@ type Peer struct {
 	addr     *net.TCPAddr
 	valid    bool
 	ssh      ssh.Conn
+	fbin     ssh.Channel
 
 	annIdx    uint64
 	numG      uint32
@@ -179,6 +180,14 @@ func (a *Agent) handleFleetSsh(tc *tls.Conn, incoming bool) {
 			//ClientVersion:
 		}
 		p.ssh, chans, reqs, err = ssh.NewClientConn(tc, p.id, cfg)
+		fbin, reqs, err := p.ssh.OpenChannel("fbin", nil)
+		if err != nil {
+			slog.Error(fmt.Sprintf("[fleet] failed to open fbin channel"), "event", "fleet:peer:ssh_fbinch_error")
+		} else {
+			p.fbin = fbin
+			go p.loop()
+			go ssh.DiscardRequests(reqs)
+		}
 	}
 	if err != nil {
 		slog.Error(fmt.Sprintf("[fleet] SSH connection failed: %s", err), "event", "fleet:peer:ssh_fail")
@@ -264,9 +273,19 @@ func (p *Peer) handleSshChans(chans <-chan ssh.NewChannel) {
 			nch, reqs, err := ch.Accept()
 			if err != nil {
 				slog.Error(fmt.Sprintf("[fleet] channel accept failed: %s", err), "event", "fleet:peer:accept_fail")
+				break
 			}
 			go ssh.DiscardRequests(reqs)
 			svc <- &quasiConn{Channel: nch, p: p}
+		case "fbin":
+			nch, reqs, err := ch.Accept()
+			if err != nil {
+				slog.Error(fmt.Sprintf("[fleet] channel accept failed: %s", err), "event", "fleet:peer:accept_fail")
+				break
+			}
+			go ssh.DiscardRequests(reqs)
+			p.fbin = nch
+			go p.loop()
 		default:
 			slog.Error(fmt.Sprintf("[fleet] rejecting channel request for %s", ch.ChannelType()), "event", "fleet:peer:channel_reject")
 			ch.Reject(ssh.UnknownChannelType, "unknown channel type")
@@ -291,8 +310,15 @@ func (p *Peer) loop() {
 	var ln uint32  // packet len
 	var buf []byte // buffer (kept if large enough)
 
+	var c io.Reader
+	if p.fbin != nil {
+		c = p.fbin
+	} else {
+		c = p.c
+	}
+
 	for {
-		_, err := io.ReadFull(p.c, header)
+		_, err := io.ReadFull(c, header)
 		if err == nil {
 			pc = binary.BigEndian.Uint16(header[:2])
 			ln = binary.BigEndian.Uint32(header[2:])
@@ -606,19 +632,26 @@ func (p *Peer) writev(ctx context.Context, buf ...[]byte) (n int, err error) {
 	p.write.Lock()
 	defer p.write.Unlock()
 
-	if deadline, ok := ctx.Deadline(); ok {
-		if time.Until(deadline) < 0 {
-			// write error but non closing
-			return 0, os.ErrDeadlineExceeded
-		}
-		p.c.SetWriteDeadline(deadline)
+	var w io.Writer
+
+	if p.fbin != nil {
+		w = p.fbin
 	} else {
-		// reset deadline
-		p.c.SetWriteDeadline(time.Now().Add(30 * time.Second))
+		if deadline, ok := ctx.Deadline(); ok {
+			if time.Until(deadline) < 0 {
+				// write error but non closing
+				return 0, os.ErrDeadlineExceeded
+			}
+			p.c.SetWriteDeadline(deadline)
+		} else {
+			// reset deadline
+			p.c.SetWriteDeadline(time.Now().Add(30 * time.Second))
+		}
+		w = p.c
 	}
 
 	for _, b := range buf {
-		sn, serr := p.c.Write(b)
+		sn, serr := w.Write(b)
 		if sn > 0 {
 			n += sn
 		}
@@ -626,7 +659,7 @@ func (p *Peer) writev(ctx context.Context, buf ...[]byte) (n int, err error) {
 			err = serr
 			if n > 0 {
 				slog.Error("partial write on writev(), closing connection", "event", "fleet:peer:error_partial_write", "fleet.peer", p.id)
-				p.c.Close() // close because that is a partial write
+				p.Close("partial write") // close because that is a partial write
 			}
 			p.c.SetWriteDeadline(time.Time{})
 			return
@@ -636,7 +669,7 @@ func (p *Peer) writev(ctx context.Context, buf ...[]byte) (n int, err error) {
 }
 
 func (p *Peer) WritePacket(ctx context.Context, pc uint16, data []byte) error {
-	if p.ssh != nil {
+	if p.fbin == nil && p.ssh != nil {
 		// send as fbin request
 		pcBin := []byte{byte(pc >> 8), byte(pc)}
 		_, _, err := p.ssh.SendRequest("fbin", false, append(pcBin, data...))
