@@ -278,6 +278,10 @@ func (p *Peer) handleSshChans(chans <-chan ssh.NewChannel) {
 			go ssh.DiscardRequests(reqs)
 			svc <- &quasiConn{Channel: nch, p: p}
 		case "fbin":
+			if p.fbin != nil {
+				p.Close("duplicate fbin chan")
+				return
+			}
 			nch, reqs, err := ch.Accept()
 			if err != nil {
 				slog.Error(fmt.Sprintf("[fleet] channel accept failed: %s", err), "event", "fleet:peer:accept_fail")
