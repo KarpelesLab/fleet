@@ -306,7 +306,6 @@ func (p *Peer) retryLater(t time.Duration) {
 
 func (p *Peer) loop() {
 	defer p.unregister()
-	defer p.c.Close()
 
 	// read from peer
 	header := make([]byte, 6)
@@ -317,8 +316,10 @@ func (p *Peer) loop() {
 	var c io.Reader
 	if p.fbin != nil {
 		c = p.fbin
+		defer p.ssh.Close()
 	} else {
 		c = p.c
+		defer p.c.Close()
 	}
 
 	for {
@@ -665,7 +666,9 @@ func (p *Peer) writev(ctx context.Context, buf ...[]byte) (n int, err error) {
 				slog.Error("partial write on writev(), closing connection", "event", "fleet:peer:error_partial_write", "fleet.peer", p.id)
 				p.Close("partial write") // close because that is a partial write
 			}
-			p.c.SetWriteDeadline(time.Time{})
+			if p.c != nil {
+				p.c.SetWriteDeadline(time.Time{})
+			}
 			return
 		}
 	}
