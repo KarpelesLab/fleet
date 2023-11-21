@@ -339,11 +339,11 @@ func (p *Peer) loop() {
 			} else if int(ln) <= cap(buf) {
 				// can store this in the current buffer
 				buf = buf[:ln]
-				_, err = io.ReadFull(p.c, buf)
+				_, err = io.ReadFull(c, buf)
 			} else {
 				// allocate new buffer
 				buf = make([]byte, ln)
-				_, err = io.ReadFull(p.c, buf)
+				_, err = io.ReadFull(c, buf)
 			}
 		}
 		if err == nil {
