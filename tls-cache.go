@@ -118,7 +118,7 @@ func (c *crtCache) loadCert() (*tls.Certificate, error) {
 
 	res, err := tls.X509KeyPair(crt, key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("while instanciating tls keypair: %w", err)
 	}
 	return &res, nil
 }

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -80,6 +81,7 @@ func WithIssuer(url string, opts ...AgentOption) *Agent {
 			sig, err = key.Sign(rand.Reader, h[:], crypto.SHA256)
 		}
 		if err != nil {
+			slog.Error(fmt.Sprintf("error while signing request: %s", err), "event", "fleet:issuer:getfile_sign_fail")
 			return nil, fmt.Errorf("while signing request: %w", err)
 		}
 
