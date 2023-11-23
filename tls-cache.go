@@ -3,6 +3,7 @@ package fleet
 import (
 	"crypto"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -117,7 +118,7 @@ func (c *crtCache) loadCert(allowRetry bool) (*tls.Certificate, error) {
 		return nil, err
 	}
 
-	res, err := tls.X509KeyPair(crt, key)
+	res, err := crtCacheLoadAndCheck(crt, key)
 	if err != nil {
 		// remove from local data cache and try again to see if that helps
 		if allowRetry {
@@ -128,4 +129,30 @@ func (c *crtCache) loadCert(allowRetry bool) (*tls.Certificate, error) {
 		return nil, fmt.Errorf("while instanciating tls keypair: %w", err)
 	}
 	return &res, nil
+}
+
+func crtCacheLoadAndCheck(certPEMBlock, keyPEMBlock []byte) (tls.Certificate, error) {
+	cert, err := tls.X509KeyPair(certPEMBlock, keyPEMBlock)
+	if err != nil {
+		return cert, err
+	}
+	// ensure leaf is loaded (tls.X509KeyPair will not set it, but maybe it will in the future?)
+	if cert.Leaf == nil {
+		x509Cert, err := x509.ParseCertificate(cert.Certificate[0])
+		if err != nil {
+			return cert, err
+		}
+		cert.Leaf = x509Cert
+	}
+	// check leaf for expiration (returning an error allows clearing cache & fetching of new certificate)
+	now := time.Now()
+	if now.Before(cert.Leaf.NotBefore) {
+		return cert, fmt.Errorf("certificate is not valid yet (now=%s notbefore=%s)", now, cert.Leaf.NotBefore)
+	}
+	if now.After(cert.Leaf.NotAfter) {
+		return cert, fmt.Errorf("certificate has expired (now=%s notafter=%s)", now, cert.Leaf.NotAfter)
+	}
+
+	// all good
+	return cert, nil
 }
