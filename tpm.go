@@ -4,6 +4,7 @@ import (
 	"crypto"
 	"crypto/x509"
 	"encoding/asn1"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -81,11 +82,21 @@ func getTpmKey() (crypto.Signer, error) {
 		key: key,
 	}
 
+	slog.Info(fmt.Sprintf("instanciated tpm key: %s", tpmKeyObject.String()), "event", "fleet:tpm:init")
+
 	return tpmKeyObject, nil
 }
 
 func (k *tpmKey) Public() crypto.PublicKey {
 	return k.key.PublicKey()
+}
+
+func (k *tpmKey) String() string {
+	b, err := x509.MarshalPKIXPublicKey(k.Public())
+	if err != nil {
+		return fmt.Sprintf("INVALID KEY (%s)", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(b)
 }
 
 func (k *tpmKey) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
