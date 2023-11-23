@@ -42,7 +42,7 @@ func (c *crtCache) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error
 	}
 	c.t = time.Now()
 
-	c.crt, c.err = c.loadCert()
+	c.crt, c.err = c.loadCert(true)
 	if c.err != nil {
 		slog.Warn(fmt.Sprintf("[tls] Failed to fetch %s certificate: %s", c.k, c.err), "event", "fleet:tls:fetch_fail")
 	}
@@ -70,7 +70,7 @@ func (c *crtCache) PrivateKey() (crypto.PrivateKey, error) {
 
 	c.t = time.Now()
 
-	c.crt, c.err = c.loadCert()
+	c.crt, c.err = c.loadCert(true)
 	if c.err != nil {
 		slog.Warn(fmt.Sprintf("[tls] Failed to fetch %s certificate: %s", c.k, c.err), "event", "fleet:tls:fetch_fail")
 	}
@@ -81,7 +81,8 @@ func (c *crtCache) PrivateKey() (crypto.PrivateKey, error) {
 	return c.crt.PrivateKey, nil
 }
 
-func (c *crtCache) loadCert() (*tls.Certificate, error) {
+// loadCert actually fetches the certificate and instanciates a tls.Certificate
+func (c *crtCache) loadCert(allowRetry bool) (*tls.Certificate, error) {
 	crt, err := c.a.dbFleetLoad(c.k + ":crt")
 	if err != nil {
 		return nil, err
@@ -118,8 +119,12 @@ func (c *crtCache) loadCert() (*tls.Certificate, error) {
 
 	res, err := tls.X509KeyPair(crt, key)
 	if err != nil {
-		// remove from local data cache so next time have a chance to fetch from issuer
-		c.a.dbFleetDel(c.k+":crt", c.k+":key")
+		// remove from local data cache and try again to see if that helps
+		if allowRetry {
+			c.a.dbFleetDel(c.k+":crt", c.k+":key")
+			return c.loadCert(false)
+		}
+		// give up
 		return nil, fmt.Errorf("while instanciating tls keypair: %w", err)
 	}
 	return &res, nil
