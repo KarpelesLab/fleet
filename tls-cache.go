@@ -18,27 +18,29 @@ type crtCache struct {
 	lk  sync.Mutex
 	t   time.Time
 	crt *tls.Certificate
+	exp time.Time // expiration time
 	err error
 }
 
 func (c *crtCache) GetClientCertificate(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
-	crt, err := c.GetCertificate(nil)
-	if err != nil || crt == nil {
+	crt, _ := c.GetCertificate(nil)
+	if crt == nil {
 		// error happened, but we don't care, let's just try without certificate.
-		// Go documentation: GetClientCertificate must return non-nil
+		// Go documentation: unlike GetCertificate, GetClientCertificate must return non-nil
 		return &tls.Certificate{}, nil
 	}
 	return crt, nil
 }
 
 func (c *crtCache) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-	if time.Since(c.t) < time.Hour*24 {
+	if time.Until(c.exp) > 0 && time.Since(c.t) < time.Hour*24 {
 		return c.crt, c.err
 	}
+
 	c.lk.Lock()
 	defer c.lk.Unlock()
 
-	if time.Since(c.t) < time.Hour*24 {
+	if time.Until(c.exp) > 0 && time.Since(c.t) < time.Hour*24 {
 		return c.crt, c.err
 	}
 	c.t = time.Now()
@@ -126,7 +128,11 @@ func (c *crtCache) loadCert(allowRetry bool) (*tls.Certificate, error) {
 			return c.loadCert(false)
 		}
 		// give up
+		c.exp = time.Now().Add(time.Hour) // force retry in 1h
 		return nil, fmt.Errorf("while instanciating tls keypair: %w", err)
+	} else {
+		// set expiration 24 hours before actual expiration, typically we fetch the new cert sooner
+		c.exp = res.Leaf.NotAfter.Add(-24 * time.Hour)
 	}
 	return &res, nil
 }
@@ -149,7 +155,7 @@ func crtCacheLoadAndCheck(certPEMBlock, keyPEMBlock []byte) (tls.Certificate, er
 	if now.Before(cert.Leaf.NotBefore) {
 		return cert, fmt.Errorf("certificate is not valid yet (now=%s notbefore=%s)", now, cert.Leaf.NotBefore)
 	}
-	if now.After(cert.Leaf.NotAfter) {
+	if now.After(cert.Leaf.NotAfter.Add(-24 * time.Hour)) {
 		return cert, fmt.Errorf("certificate has expired (now=%s notafter=%s)", now, cert.Leaf.NotAfter)
 	}
 
