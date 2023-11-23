@@ -256,13 +256,18 @@ func (a *Agent) dbSimpleSet(bucket, key, val []byte) error {
 }
 
 // internal delete
-func (a *Agent) dbSimpleDel(bucket, key []byte) error {
+func (a *Agent) dbSimpleDel(bucket []byte, keys ...[]byte) error {
 	return a.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucket)
 		if b == nil {
 			return nil
 		}
-		return b.Delete(key)
+		for _, key := range keys {
+			if err := b.Delete(key); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
@@ -330,9 +335,16 @@ func (a *Agent) dbFleetGet(keyname string) ([]byte, error) {
 	return data, err
 }
 
-func (a *Agent) dbFleetDel(keyname string) error {
+func (a *Agent) dbFleetDel(keynames ...string) error {
+	if len(keynames) == 0 {
+		return nil
+	}
 	// for example keyname="internal_key:jwt"
-	return a.dbSimpleDel([]byte("fleet"), []byte(keyname))
+	keys := make([][]byte, len(keynames))
+	for n, keyname := range keynames {
+		keys[n] = []byte(keyname)
+	}
+	return a.dbSimpleDel([]byte("fleet"), keys...)
 }
 
 type DbCursor struct {

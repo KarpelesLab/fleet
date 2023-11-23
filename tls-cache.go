@@ -118,6 +118,8 @@ func (c *crtCache) loadCert() (*tls.Certificate, error) {
 
 	res, err := tls.X509KeyPair(crt, key)
 	if err != nil {
+		// remove from local data cache so next time have a chance to fetch from issuer
+		c.a.dbFleetDel(c.k+":crt", c.k+":key")
 		return nil, fmt.Errorf("while instanciating tls keypair: %w", err)
 	}
 	return &res, nil
