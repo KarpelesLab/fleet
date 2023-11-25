@@ -23,6 +23,12 @@ func Self() *Agent {
 	}
 }
 
+func selfNoWait() *Agent {
+	selfLk.RLock()
+	defer selfLk.RUnlock()
+	return self
+}
+
 func setSelf(a *Agent) {
 	selfLk.Lock()
 	defer selfLk.Unlock()
@@ -31,4 +37,14 @@ func setSelf(a *Agent) {
 		self = a
 	}
 	selfCond.Broadcast()
+}
+
+// IsReady returns true if the fleet is initiated and configured properly
+func IsReady() bool {
+	a := selfNoWait()
+
+	if a == nil {
+		return false
+	}
+	return a.GetStatus() == 1
 }
