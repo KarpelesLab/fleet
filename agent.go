@@ -822,6 +822,34 @@ func (a *Agent) handleRpcResponse(pkt *PacketRpcResponse) error {
 	}
 }
 
+// DialPeer will connect to a given host and attempt to negociate a connection. Do not use unless
+// you know what you are doing. id can be left empty if unknown.
+func (a *Agent) DialPeer(host string, port int, id string, alt ...string) {
+	cfg := a.outCfg.Clone()
+	cfg.ServerName = id
+	cfg.NextProtos = []string{"fssh", "fbin"}
+
+	// handle alt IPs and try these first
+	if len(alt) > 0 {
+		// typically alt ips are in the CIDR format, we want to re-format these as host:port
+		c, err := tlsDialAll(context.Background(), 5*time.Second, formatAltAddrs(host, alt, port), cfg)
+		if err == nil {
+			// success!
+			go a.newConn(c, false)
+			return
+		}
+		slog.Debug(fmt.Sprintf("[fleet] Alt connection failed, will attempt regular connection: %s", err), "event", "fleet:agent:altfail")
+	}
+
+	c, err := tls.Dial("tcp", host+":"+strconv.FormatInt(int64(port), 10), cfg)
+	if err != nil {
+		slog.Warn(fmt.Sprintf("[fleet] failed to manually connect to peer %s: %s", id, err), "event", "fleet:agent:conn_fail")
+		return
+	}
+
+	go a.newConn(c, false)
+}
+
 func (a *Agent) dialPeer(host string, port int, name string, id string, alt []string) {
 	if id == a.id {
 		// avoid connect to self
