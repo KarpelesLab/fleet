@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/KarpelesLab/goupd v0.3.2
-	github.com/KarpelesLab/jwt v0.1.4
+	github.com/KarpelesLab/jwt v0.1.5
 	github.com/KarpelesLab/rchan v1.0.1
 	github.com/KarpelesLab/ringbuf v0.1.2
 	github.com/google/go-tpm v0.9.0
