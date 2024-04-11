@@ -2,6 +2,7 @@ package fleet
 
 import (
 	"context"
+	"crypto"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
@@ -167,6 +168,18 @@ func (a *Agent) WaitReady() {
 		}
 		a.statusCond.Wait()
 	}
+}
+
+// ExternalKey returns the key associated with the cluster, if any. If this host hasn't
+// joined a cluster or the cluster has no shared key, this will return fs.ErrNotExist
+func (a *Agent) ExternalKey() (crypto.PrivateKey, error) {
+	return a.pubCert.PrivateKey()
+}
+
+// InternalKey returns the key associated with the local host, possibly a TPM key if the
+// host has a functioning tpm.
+func (a *Agent) InternalKey() (crypto.PrivateKey, error) {
+	return a.intCert.PrivateKey()
 }
 
 func (a *Agent) doInit(token *jwt.Token) (err error) {
