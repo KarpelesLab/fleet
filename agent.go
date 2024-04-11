@@ -178,8 +178,8 @@ func (a *Agent) ExternalKey() (crypto.PrivateKey, error) {
 
 // InternalKey returns the key associated with the local host, possibly a TPM key if the
 // host has a functioning tpm.
-func (a *Agent) InternalKey() (crypto.PrivateKey, error) {
-	return a.intCert.PrivateKey()
+func (a *Agent) InternalKey() (crypto.Signer, error) {
+	return a.getLocalKey()
 }
 
 func (a *Agent) doInit(token *jwt.Token) (err error) {
