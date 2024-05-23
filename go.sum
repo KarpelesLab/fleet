@@ -24,6 +24,8 @@ github.com/KarpelesLab/jwt v0.1.5 h1:RrkHyRIy1kpJ9PEcffJw7L+Q06hzusKJKVt/z9GQfg4
 github.com/KarpelesLab/jwt v0.1.5/go.mod h1:rv2G7Sx+iXO9KH6qCL0SIRordO0FTxLTUwh8GUbtmbY=
 github.com/KarpelesLab/jwt v0.1.7 h1:vvxtrDn5cfek1sh7aLUj0HmzYMutYelCKKTWVdwt43w=
 github.com/KarpelesLab/jwt v0.1.7/go.mod h1:rv2G7Sx+iXO9KH6qCL0SIRordO0FTxLTUwh8GUbtmbY=
+github.com/KarpelesLab/jwt v0.1.8 h1:hjlwvm3BGMR0QfMl8YArLcT1JCOdcv4Zy5WVj7J8Ysc=
+github.com/KarpelesLab/jwt v0.1.8/go.mod h1:rv2G7Sx+iXO9KH6qCL0SIRordO0FTxLTUwh8GUbtmbY=
 github.com/KarpelesLab/rchan v1.0.0 h1:eLp2OhASdoSL8BIP80eHySwJQZfECxAHUYd5fU2CeTQ=
 github.com/KarpelesLab/rchan v1.0.0/go.mod h1:Osy4g3kPFTIwBn+N6TVji4goTOdzEJYIlaE7m8nv2sw=
 github.com/KarpelesLab/rchan v1.0.1 h1:uIkAAp/50NjY+j0LTkWmyk2h+RzIu525Y4Dg/vMxV2k=
