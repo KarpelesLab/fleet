@@ -9,4 +9,5 @@ var (
 	ErrInvalidLegacy    = errors.New("invalid operation on legacy peer")
 	ErrInvalidLockName  = errors.New("invalid lock name")
 	ErrCancelledLock    = errors.New("lock request has been cancelled")
+	ErrEndpointNameLen  = errors.New("RPC endpoint name length too long")
 )

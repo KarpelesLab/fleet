@@ -515,7 +515,7 @@ func (a *Agent) AllRPC(ctx context.Context, endpoint string, data any) ([]any, e
 func (a *Agent) AllRpcRequest(ctx context.Context, endpoint string, data []byte) ([]any, error) {
 	// call method on ALL hosts and collect responses
 	if len(endpoint) > 65535 {
-		return nil, errors.New("RPC endpoint name length too long")
+		return nil, ErrEndpointNameLen
 	}
 
 	// put a timeout on context just in case
@@ -595,6 +595,16 @@ func (a *Agent) BroadcastRpcBin(ctx context.Context, endpoint string, pkt []byte
 		return
 	}
 
+	if len(endpoint) > 65535 {
+		return 0, ErrEndpointNameLen
+	}
+
+	buf := make([]byte, 14)
+	binary.BigEndian.PutUint64(buf[:8], 0)
+	binary.BigEndian.PutUint32(buf[8:12], 0) // flags
+	binary.BigEndian.PutUint16(buf[12:14], uint16(len(endpoint)))
+	buf = append(append(buf, endpoint...), pkt...)
+
 	var wg sync.WaitGroup
 
 	for _, p := range a.peers {
@@ -607,7 +617,7 @@ func (a *Agent) BroadcastRpcBin(ctx context.Context, endpoint string, pkt []byte
 		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
 		go func(ap *Peer) {
 			defer wg.Done()
-			ap.ssh.SendRequest("rpc/"+endpoint, false, pkt)
+			ap.WritePacket(ctx, PacketRpcBinReq, buf)
 		}(p)
 	}
 
@@ -619,7 +629,7 @@ func (a *Agent) BroadcastRpcBin(ctx context.Context, endpoint string, pkt []byte
 
 func (a *Agent) RpcRequest(ctx context.Context, id string, endpoint string, data []byte) ([]byte, error) {
 	if len(endpoint) > 65535 {
-		return nil, errors.New("RPC endpoint name length too long")
+		return nil, ErrEndpointNameLen
 	}
 
 	// send data to given peer
@@ -656,12 +666,22 @@ func (a *Agent) RpcRequest(ctx context.Context, id string, endpoint string, data
 // RpcSend sends a request but expects no response, failure will only reported if the request failed to be
 // sent, and failure on the other side will not be reported
 func (a *Agent) RpcSend(ctx context.Context, id string, endpoint string, data []byte) error {
+	if len(endpoint) > 65535 {
+		return ErrEndpointNameLen
+	}
+
 	p := a.GetPeer(id)
 	if p == nil {
 		return errors.New("failed to find peer")
 	}
 
-	_, _, err := p.ssh.SendRequest("rpc/"+endpoint, false, data)
+	buf := make([]byte, 14)
+	binary.BigEndian.PutUint64(buf[:8], 0)
+	binary.BigEndian.PutUint32(buf[8:12], 0) // flags
+	binary.BigEndian.PutUint16(buf[12:14], uint16(len(endpoint)))
+	buf = append(append(buf, endpoint...), data...)
+
+	err := p.WritePacket(ctx, PacketRpcBinReq, buf)
 	if err != nil {
 		slog.Warn(fmt.Sprintf("[fleet] failed sending RPC packet to peer %s: %s", p.name, err), "event", "fleet:rpc:sendfail")
 	}
