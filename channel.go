@@ -58,6 +58,9 @@ func (a *Agent) performChannelUpdateLater() {
 		return
 	}
 	channel := string(v)
+	if channel == "" {
+		channel = "master"
+	}
 	if channel == goupd.CHANNEL {
 		// turns out we don't have to do anything
 		return
