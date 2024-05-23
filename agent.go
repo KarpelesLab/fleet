@@ -605,10 +605,10 @@ func (a *Agent) BroadcastRpcBin(ctx context.Context, endpoint string, pkt []byte
 		n += 1
 		wg.Add(1)
 		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
-		go func() {
+		go func(ap *Peer) {
 			defer wg.Done()
-			p.ssh.SendRequest("rpc/"+endpoint, false, pkt)
-		}()
+			ap.ssh.SendRequest("rpc/"+endpoint, false, pkt)
+		}(p)
 	}
 
 	// wait for all sends to end to make sure pkt can be re-used
