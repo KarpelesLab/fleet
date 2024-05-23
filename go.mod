@@ -5,7 +5,7 @@ go 1.21
 toolchain go1.22.2
 
 require (
-	github.com/KarpelesLab/goupd v0.4.3
+	github.com/KarpelesLab/goupd v0.4.4
 	github.com/KarpelesLab/jwt v0.1.10
 	github.com/KarpelesLab/rchan v1.0.1
 	github.com/KarpelesLab/ringbuf v0.1.2

@@ -10,6 +10,8 @@ github.com/KarpelesLab/goupd v0.3.2 h1:XK0Y3dTf9C6tTBk5QlJZ7pDSqtuBd4NFdjFEd3miH
 github.com/KarpelesLab/goupd v0.3.2/go.mod h1:TFiRFPvG6MjJOCAL4LZk4idnMGcC+azNSGDLfNvzi1c=
 github.com/KarpelesLab/goupd v0.4.3 h1:V7TS3+ROr3RiNK6AWROJrz3/JeLLkH0VAKnJsSnKR54=
 github.com/KarpelesLab/goupd v0.4.3/go.mod h1:tq6+XSbf6fNtLOdiG2ud23meV8JuP9mLXKOzoDZ1lno=
+github.com/KarpelesLab/goupd v0.4.4 h1:LFZ0I9CtCXU8mItEvewwbtnOVBxKTX1KaGAJOnGYR20=
+github.com/KarpelesLab/goupd v0.4.4/go.mod h1:tq6+XSbf6fNtLOdiG2ud23meV8JuP9mLXKOzoDZ1lno=
 github.com/KarpelesLab/jwt v0.0.3 h1:hZSii5uuBjIpVAWgsg1h8QYDUzZvB0/U0N5o0tAtR3o=
 github.com/KarpelesLab/jwt v0.0.3/go.mod h1:VUYIYCOSk4qnzdRtv5P8JvPB0cBEjmpZYdvJi2Yao+8=
 github.com/KarpelesLab/jwt v0.1.1 h1:mCSJIfyVUvEdHZTjhsouMnF6bLE8EvWGxpoVBA17Plc=
