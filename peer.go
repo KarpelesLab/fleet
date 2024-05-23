@@ -332,16 +332,9 @@ func (p *Peer) loop() {
 				// too large
 				err = fmt.Errorf("rejected packet too large (%d bytes)", ln)
 			} else if ln == 0 {
-				if buf != nil {
-					// set buf length to 0 but do not drop buf
-					buf = buf[:0]
-				}
-			} else if int(ln) <= cap(buf) {
-				// can store this in the current buffer
-				buf = buf[:ln]
-				_, err = io.ReadFull(c, buf)
+				buf = nil
 			} else {
-				// allocate new buffer
+				// always allocate new buffer
 				buf = make([]byte, ln)
 				_, err = io.ReadFull(c, buf)
 			}
