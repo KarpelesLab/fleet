@@ -756,18 +756,21 @@ func (a *Agent) handleRpcBin(peer *Peer, buf []byte) error {
 			// do not send any response
 			return
 		}
-		dataB, ok := data.([]byte)
-		if !ok {
-			err = errors.New("RPC method did not return []byte")
-		}
+
+		var res []byte
 
 		if err != nil {
 			// report error
 			flags |= 0x10000 // ="error"
-			dataB = []byte(err.Error())
+			res = append(pfx, err.Error()...)
+		} else {
+			dataB, ok := data.([]byte)
+			if !ok {
+				err = errors.New("RPC method did not return []byte")
+			}
+			res = append(pfx, dataB...)
 		}
 
-		res := append(pfx, dataB...)
 		binary.BigEndian.PutUint32(res[:4], flags) // update flags if needed
 
 		// return result by sending packet
