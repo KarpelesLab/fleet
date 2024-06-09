@@ -255,6 +255,25 @@ func (a *Agent) Name() (string, string) {
 	return a.name, a.hostname
 }
 
+// AltNames will attempt to return alternative names from the certificate issued to this node
+func (a *Agent) AltNames() []string {
+	crt, err := a.intCert.GetCertificate(nil)
+	if err != nil {
+		return nil
+	}
+
+	var res []string
+
+	for _, n := range crt.Leaf.DNSNames {
+		res = append(res, n)
+	}
+	for _, n := range crt.Leaf.IPAddresses {
+		res = append(res, n.String())
+	}
+
+	return res
+}
+
 func (a *Agent) BroadcastRpc(ctx context.Context, endpoint string, data any) error {
 	// send request
 	pkt := &PacketRpc{
