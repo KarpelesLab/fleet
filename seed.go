@@ -79,7 +79,7 @@ func (a *Agent) initSeed() {
 		}
 	}
 
-	_, err := rand.Read(s)
+	_, err := io.ReadFull(rand.Reader, s)
 	if err != nil {
 		panic(fmt.Sprintf("failed to initialize fleet seed: %s", err))
 	}
