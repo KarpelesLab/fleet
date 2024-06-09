@@ -247,10 +247,12 @@ func (a *Agent) doInit(token *jwt.Token) (err error) {
 	return
 }
 
+// Id returns the id of the local node
 func (a *Agent) Id() string {
 	return a.id
 }
 
+// Name returns the name and hostname of the local node
 func (a *Agent) Name() (string, string) {
 	return a.name, a.hostname
 }
@@ -274,6 +276,7 @@ func (a *Agent) AltNames() []string {
 	return res
 }
 
+// BroadcastRpc broadcasts the given data to the specified endpoint
 func (a *Agent) BroadcastRpc(ctx context.Context, endpoint string, data any) error {
 	// send request
 	pkt := &PacketRpc{
