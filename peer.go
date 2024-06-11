@@ -304,6 +304,10 @@ func (p *Peer) retryLater(t time.Duration) {
 	p.a.dialPeer(p.addr.IP.String(), p.addr.Port, p.name, p.id, nil)
 }
 
+func (p *Peer) Addr() net.Addr {
+	return p.addr
+}
+
 func (p *Peer) loop() {
 	defer p.unregister()
 
