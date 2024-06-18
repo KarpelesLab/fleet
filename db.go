@@ -113,6 +113,10 @@ func (a *Agent) needDbEntry(bucket, key []byte, v DbStamp) bool {
 		return false
 	}
 
+	if bytes.HasSuffix(key, []byte{'!'}) {
+		return curVT.After(v)
+	}
+
 	// if "v" is after our version, we need it
 	return v.After(curVT)
 }
@@ -135,9 +139,15 @@ func (a *Agent) feedDbSet(bucket, key, val []byte, v DbStamp) error {
 			return err
 		}
 		// compare with v
-		if !v.After(curVT) {
-			// no need for update, we already have the latest version
-			return nil
+		if bytes.HasSuffix(key, []byte{'!'}) {
+			if !curVT.After(v) {
+				return nil
+			}
+		} else {
+			if !v.After(curVT) {
+				// no need for update, we already have the latest version
+				return nil
+			}
 		}
 	}
 
