@@ -257,6 +257,11 @@ func (a *Agent) Name() (string, string) {
 	return a.name, a.hostname
 }
 
+// Division returns the division (locality) of the local node
+func (a *Agent) Division() string {
+	return a.division
+}
+
 // AltNames will attempt to return alternative names from the certificate issued to this node
 func (a *Agent) AltNames() []string {
 	crt, err := a.intCert.GetCertificate(nil)
