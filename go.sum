@@ -1,3 +1,5 @@
+github.com/KarpelesLab/cloudinfo v0.1.3 h1:cM2kI0kXq8d9/BmU/+xjCTmQO5YeKTMjTW3dmwjKG7E=
+github.com/KarpelesLab/cloudinfo v0.1.3/go.mod h1:JUe7GRz++49G6wOQzWbiMVFnvmJh/Y7iA4Oq8JD/Wis=
 github.com/KarpelesLab/goupd v0.2.5 h1:qgaNUmgOxYquVsiXKVLywOB7pH6PSCo1TzSFj1cybWE=
 github.com/KarpelesLab/goupd v0.2.5/go.mod h1:Sr/OaGDtQ/nenXcG/DI2pTX4us1MexhppeMUMN7fsTw=
 github.com/KarpelesLab/goupd v0.2.6 h1:FXjNaVy7LlH8wQ/7fvvIP79TZGkGqOlejCaOefmhiFg=

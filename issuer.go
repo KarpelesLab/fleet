@@ -17,6 +17,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/KarpelesLab/cloudinfo"
 	"github.com/KarpelesLab/goupd"
 )
 
@@ -55,14 +56,15 @@ func WithIssuer(url string, opts ...AgentOption) *Agent {
 		}
 
 		// fetch our local hostname to be included in request (just informative)
-		hn, _ := os.Hostname()
+		nfo, _ := cloudinfo.Load()
 
 		body := map[string]any{
-			"ts":    time.Now().UnixMicro(),
-			"file":  f,
-			"key":   base64.RawURLEncoding.EncodeToString(pubBin),
-			"host":  hn,
-			"goupd": goupd.GetVars(),
+			"ts":       time.Now().UnixMicro(),
+			"file":     f,
+			"key":      base64.RawURLEncoding.EncodeToString(pubBin),
+			"host":     info.Hostname,
+			"location": info.Location.String(),
+			"goupd":    goupd.GetVars(),
 		}
 
 		// prepare request body (will never fail)
