@@ -85,6 +85,7 @@ type Agent struct {
 	// settings
 	settings        map[string]any
 	settingsUpdated time.Time
+	settingsLk      sync.Mutex
 }
 
 // New will just initialize a basic agent without any settings
@@ -1189,6 +1190,9 @@ func (a *Agent) copyMeta() map[string]any {
 // Settings fetches the current settings from the global system and returns these
 // if the system is initializing, this will block until initialization is done
 func (a *Agent) Settings() (map[string]any, error) {
+	a.settingsLk.Lock()
+	defer a.settingsLk.Unlock()
+
 	if a.settings == nil {
 		a.settingsUpdated = time.Now()
 		err := a.updateSettings()
