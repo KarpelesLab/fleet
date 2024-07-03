@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/KarpelesLab/cloudinfo"
 	"github.com/KarpelesLab/jwt"
 	"github.com/KarpelesLab/rchan"
 	bolt "go.etcd.io/bbolt"
@@ -271,12 +272,33 @@ func (a *Agent) AltNames() []string {
 	}
 
 	var res []string
+	has := make(map[string]bool)
 
 	for _, n := range crt.Leaf.DNSNames {
 		res = append(res, n)
+		has[n] = true
 	}
 	for _, n := range crt.Leaf.IPAddresses {
-		res = append(res, n.String())
+		ipstr := n.String()
+		res = append(res, ipstr)
+		has[ipstr] = true
+	}
+
+	// gather cloud info
+	info, _ := cloudinfo.Load()
+	for _, ip := range info.PublicIP {
+		ipstr := ip.String()
+		if _, ok := has[ipstr]; !ok {
+			res = append(res, ipstr)
+			has[ipstr] = true
+		}
+	}
+	for _, ip := range info.PrivateIP {
+		ipstr := ip.String()
+		if _, ok := has[ipstr]; !ok {
+			res = append(res, ipstr)
+			has[ipstr] = true
+		}
 	}
 
 	return res
