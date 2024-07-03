@@ -274,14 +274,16 @@ func (a *Agent) AltNames() []string {
 	var res []string
 	has := make(map[string]bool)
 
-	for _, n := range crt.Leaf.DNSNames {
-		res = append(res, n)
-		has[n] = true
-	}
-	for _, n := range crt.Leaf.IPAddresses {
-		ipstr := n.String()
-		res = append(res, ipstr)
-		has[ipstr] = true
+	if crt != nil && crt.Leaf != nil {
+		for _, n := range crt.Leaf.DNSNames {
+			res = append(res, n)
+			has[n] = true
+		}
+		for _, n := range crt.Leaf.IPAddresses {
+			ipstr := n.String()
+			res = append(res, ipstr)
+			has[ipstr] = true
+		}
 	}
 
 	// gather cloud info
