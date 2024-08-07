@@ -26,6 +26,7 @@ import (
 	"github.com/KarpelesLab/cloudinfo"
 	"github.com/KarpelesLab/jwt"
 	"github.com/KarpelesLab/rchan"
+	"github.com/KarpelesLab/tpmlib"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -1056,9 +1057,9 @@ func (a *Agent) DumpInfo(w io.Writer) {
 	fmt.Fprintf(w, "Division:   %s\n", a.division)
 	fmt.Fprintf(w, "Local ID:   %s\n", a.id)
 	fmt.Fprintf(w, "Seed ID:    %s (seed stamp: %s)\n", a.SeedId(), a.seed.ts)
-	if tk := tpmKeyObject; tk != nil {
+	if tk, err := tpmlib.GetKey(); err == nil {
 		// we have a tpm key
-		fmt.Fprintf(w, "TPM key:    YES\n")
+		fmt.Fprintf(w, "TPM key:    YES (%s)\n", tk)
 	}
 	fmt.Fprintf(w, "\n")
 

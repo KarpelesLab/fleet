@@ -16,6 +16,10 @@ require (
 )
 
 require (
+	github.com/KarpelesLab/cryptutil v0.2.7 // indirect
+	github.com/KarpelesLab/tpmlib v0.1.2 // indirect
+	github.com/ModChain/edwards25519 v1.0.0 // indirect
+	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/go-configfs-tsm v0.2.2 // indirect
 	github.com/google/go-sev-guest v0.11.1 // indirect
@@ -23,6 +27,7 @@ require (
 	github.com/google/logger v1.1.1 // indirect
 	github.com/pborman/uuid v1.2.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/x448/float16 v0.8.4 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/sys v0.21.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect

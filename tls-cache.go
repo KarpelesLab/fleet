@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/KarpelesLab/tpmlib"
 )
 
 type crtCache struct {
@@ -94,7 +96,7 @@ func (c *crtCache) loadCert(allowRetry bool) (*tls.Certificate, error) {
 	if err != nil && c.k == "internal_key" {
 		// check for tpm key
 		var s crypto.Signer
-		s, err = c.a.getTpmKey()
+		s, err := tpmlib.GetKey()
 		if err == nil {
 			// we need to generate the appropriate object to use this certificate with the tpm
 			res := &tls.Certificate{}

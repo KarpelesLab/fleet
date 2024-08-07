@@ -15,6 +15,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/KarpelesLab/tpmlib"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/sha3"
 )
@@ -23,7 +24,7 @@ func (a *Agent) getLocalKey() (crypto.Signer, error) {
 	keyPem, err := a.dbFleetGet("internal_key:key")
 	if err != nil {
 		// we might be able to use a tpm key (we only do that if there was no key)
-		if res, err := a.getTpmKey(); err == nil {
+		if res, err := tpmlib.GetKey(); err == nil {
 			return res, nil
 		}
 		// gen & save a new key
