@@ -25,7 +25,7 @@ type RPC interface {
 	// Request will send a given object to a specific peer and return the response
 	Request(ctx context.Context, id string, data []byte) ([]byte, error)
 
-	// SEnd will send a given object to a specific peer but ignore the response
+	// Send will send a given object to a specific peer but ignore the response
 	Send(ctx context.Context, id string, data []byte) error
 
 	// Self will return the id of the local peer, can be used for other instances
