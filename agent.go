@@ -26,6 +26,7 @@ import (
 	"github.com/KarpelesLab/cloudinfo"
 	"github.com/KarpelesLab/jwt"
 	"github.com/KarpelesLab/rchan"
+	"github.com/KarpelesLab/spotlib"
 	"github.com/KarpelesLab/tpmlib"
 	bolt "go.etcd.io/bbolt"
 )
@@ -41,6 +42,7 @@ type Agent struct {
 	hostname string // only the hostname side
 	IP       string // ip as seen from outside
 	cache    string // location of cache
+	spot     *spotlib.Client
 
 	inCfg  *tls.Config
 	outCfg *tls.Config
@@ -134,6 +136,7 @@ func (a *Agent) start() {
 	a.initSeed()
 	a.directoryThread()
 	a.channelSet()
+	a.initSpot()
 
 	// only setSelf() after everything has been started so we know Self() returns a ready instance
 	setSelf(a)
@@ -145,6 +148,7 @@ func closeAgentect(a *Agent) {
 
 func (a *Agent) Close() {
 	a.shutdownDb()
+	a.shutdownSpot()
 }
 
 func (a *Agent) GetStatus() int {
