@@ -5,11 +5,13 @@ go 1.22.2
 require (
 	github.com/KarpelesLab/cloudinfo v0.1.6
 	github.com/KarpelesLab/cryptutil v0.2.24
+	github.com/KarpelesLab/emitter v0.1.0
 	github.com/KarpelesLab/goupd v0.4.4
 	github.com/KarpelesLab/jwt v0.1.11
 	github.com/KarpelesLab/rchan v1.0.1
 	github.com/KarpelesLab/ringbuf v0.1.2
-	github.com/KarpelesLab/spotlib v0.1.1
+	github.com/KarpelesLab/spotlib v0.1.2
+	github.com/KarpelesLab/spotproto v0.1.7
 	github.com/KarpelesLab/tpmlib v0.1.4
 	github.com/google/go-tpm v0.9.1
 	github.com/google/go-tpm-tools v0.4.4
@@ -21,7 +23,6 @@ require (
 require (
 	github.com/KarpelesLab/pjson v0.1.9 // indirect
 	github.com/KarpelesLab/rest v0.5.21 // indirect
-	github.com/KarpelesLab/spotproto v0.1.7 // indirect
 	github.com/KarpelesLab/typutil v0.2.16 // indirect
 	github.com/KarpelesLab/webutil v0.2.1 // indirect
 	github.com/ModChain/edwards25519 v1.0.0 // indirect

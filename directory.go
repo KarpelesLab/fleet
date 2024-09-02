@@ -2,8 +2,10 @@ package fleet
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -120,6 +122,29 @@ func (a *Agent) directoryThreadStart() bool {
 	err = a.doInit(jwtInfo)
 	if err != nil {
 		slog.Warn(fmt.Sprintf("[agent] failed to init agent: %s", err), "event", "fleet:directory:agent_init_fail")
+	}
+
+	sgr := jwtInfo.Payload().GetString("sgr") // Spot Group (sha256 hash as hex)
+	if sgr != "" {
+		// new process, use spot instead of directory to find & talk with other peers
+		groupHash, err := hex.DecodeString(sgr)
+		if err == nil && len(groupHash) == 32 {
+			// let's make sure we're in the group
+			id := a.spot.IDCard()
+			found := false
+			for _, m := range id.Groups {
+				mh := sha256.Sum256(m.Key)
+				if bytes.Equal(mh[:], groupHash) {
+					a.group = m.Key
+					found = true
+				}
+			}
+			if found {
+				// do not ping directory, let's assume we're good now
+				a.setStatus(1)
+				return true
+			}
+		}
 	}
 
 	dir := jwtInfo.Payload().GetString("aud") // Audience

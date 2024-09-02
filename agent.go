@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/KarpelesLab/cloudinfo"
+	"github.com/KarpelesLab/emitter"
 	"github.com/KarpelesLab/jwt"
 	"github.com/KarpelesLab/rchan"
 	"github.com/KarpelesLab/spotlib"
@@ -43,6 +44,8 @@ type Agent struct {
 	IP       string // ip as seen from outside
 	cache    string // location of cache
 	spot     *spotlib.Client
+	Events   *emitter.Hub
+	group    []byte // Spot group key we are a member of
 
 	inCfg  *tls.Config
 	outCfg *tls.Config
@@ -134,9 +137,9 @@ func (a *Agent) start() {
 	a.initPath()
 	a.initDb()
 	a.initSeed()
+	a.initSpot()
 	a.directoryThread()
 	a.channelSet()
-	a.initSpot()
 
 	// only setSelf() after everything has been started so we know Self() returns a ready instance
 	setSelf(a)
