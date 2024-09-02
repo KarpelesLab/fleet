@@ -9,7 +9,7 @@ require (
 	github.com/KarpelesLab/jwt v0.1.11
 	github.com/KarpelesLab/rchan v1.0.1
 	github.com/KarpelesLab/ringbuf v0.1.2
-	github.com/KarpelesLab/spotlib v0.1.0
+	github.com/KarpelesLab/spotlib v0.1.1
 	github.com/KarpelesLab/tpmlib v0.1.4
 	github.com/google/go-tpm v0.9.1
 	github.com/google/go-tpm-tools v0.4.4

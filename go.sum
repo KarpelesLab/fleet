@@ -52,6 +52,8 @@ github.com/KarpelesLab/ringbuf v0.1.2 h1:IlxDIC0IrRKcffvTpXtralYS4u2pDCWiGwEnCt8
 github.com/KarpelesLab/ringbuf v0.1.2/go.mod h1:HtEUimh5Rfai5i0ULzx8wm3qhERt1OQ6DvXUxYIQoFM=
 github.com/KarpelesLab/spotlib v0.1.0 h1:JVp4yMsi/gL03eSgWOgMNcJctsOmahszpL8AzqGfyU4=
 github.com/KarpelesLab/spotlib v0.1.0/go.mod h1:n4f2lZRvAw7JB2if10OozXKNqvzgvRFKv8dvOnqOUAM=
+github.com/KarpelesLab/spotlib v0.1.1 h1:Q8JAZ3PWg9l6qPykViPjFmWBHaDNwuW6Q93JGTcNyGQ=
+github.com/KarpelesLab/spotlib v0.1.1/go.mod h1:n4f2lZRvAw7JB2if10OozXKNqvzgvRFKv8dvOnqOUAM=
 github.com/KarpelesLab/spotproto v0.1.7 h1:yZ0UNcSMLWUn8qROKtIWQJA3/+X5qx02MbTXtfyzObQ=
 github.com/KarpelesLab/spotproto v0.1.7/go.mod h1:2Mq2NRSCGbSmPVQzn+YxaRsdsXl6uo/CLS9VR/Bzzb4=
 github.com/KarpelesLab/tpmlib v0.1.2 h1:f22/c22mXaWCHgiNUbVmzIRP79BmdMBbA5xX7p/QmI4=
