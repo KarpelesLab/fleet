@@ -19,6 +19,8 @@ func (a *Agent) initSpot() {
 	kc := cryptutil.NewKeychain()
 	if tk, ok := k.(interface{ Keychain() *cryptutil.Keychain }); ok {
 		kc = tk.Keychain()
+	} else {
+		kc.AddKey(k)
 	}
 	meta := map[string]string{"agent": "go-fleet"}
 	if info, ok := debug.ReadBuildInfo(); ok {
