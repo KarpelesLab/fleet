@@ -2,23 +2,16 @@ package fleet
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
-	"io"
-	"log/slog"
 	"net"
 	"net/http"
-	"strconv"
 	"strings"
+	"time"
 
-	"golang.org/x/crypto/ssh"
+	"github.com/KarpelesLab/spotlib"
+	"github.com/quic-go/quic-go"
 )
-
-// embed connection in a separate object to avoid confusing go's HTTP server (among other stuff)
-type ServiceConn struct {
-	net.Conn
-}
 
 func (a *Agent) RoundTripper() http.RoundTripper {
 	return a.transport
@@ -53,6 +46,26 @@ func (a *Agent) Dial(network, addr string) (net.Conn, error) {
 	return a.Connect(id, addrSplit[0])
 }
 
+type quicBundle struct {
+	quic.Stream
+	c quic.Connection
+}
+
+func (b *quicBundle) Close() error {
+	// close both stream and connection
+	b.Stream.Close()
+	b.c.CloseWithError(0, "")
+	return nil
+}
+
+func (b *quicBundle) LocalAddr() net.Addr {
+	return b.c.LocalAddr()
+}
+
+func (b *quicBundle) RemoteAddr() net.Addr {
+	return b.c.RemoteAddr()
+}
+
 // connect to given peer under specified protocol (if supported)
 func (a *Agent) Connect(id string, service string) (net.Conn, error) {
 	p := a.GetPeer(id)
@@ -60,61 +73,23 @@ func (a *Agent) Connect(id string, service string) (net.Conn, error) {
 		return nil, errors.New("no route to peer")
 	}
 
-	if p.ssh != nil {
-		ch, reqs, err := p.ssh.OpenChannel("p2p", []byte(service+"."+id))
-		if err != nil {
-			return nil, err
-		}
-		go ssh.DiscardRequests(reqs)
-		return &quasiConn{Channel: ch, p: p}, nil
-	}
-
-	service_b := []byte(service)
-	if len(service_b) > 255 {
-		return nil, errors.New("service name too long")
-	}
-
 	cfg := a.outCfg.Clone()
 	cfg.ServerName = id
-	cfg.NextProtos = []string{"p2p"}
+	//cfg.NextProtos = []string{"p2p"}
 
-	c, err := tls.Dial("tcp", p.addr.IP.String()+":"+strconv.FormatInt(int64(a.port), 10), cfg)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	res, err := a.quicT.Dial(ctx, spotlib.SpotAddr(p.id+"/"+service), cfg, nil)
 	if err != nil {
-		slog.Error(fmt.Sprintf("[fleet] p2p connect error: %s", err), "event", "fleet:service:connect_fail")
+		return nil, err
+	}
+	conn, err := res.OpenStreamSync(ctx)
+	if err != nil {
+		res.CloseWithError(0, "")
 		return nil, err
 	}
 
-	_, err = c.Write(append([]byte{byte(len(service_b))}, service_b...))
-	if err != nil {
-		slog.Error(fmt.Sprintf("[fleet] p2p failed to write service request: %s", err), "event", "fleet:service:write_fail")
-		c.Close()
-		return nil, err
-	}
-
-	res := make([]byte, 1)
-	_, err = io.ReadFull(c, res)
-
-	if err != nil {
-		slog.Error(fmt.Sprintf("[fleet] p2p failed to get protocol response: %s", err), "event", "fleet:service:proto_fail")
-		c.Close()
-		return nil, err
-	}
-
-	if res[0] > 0 {
-		res = make([]byte, res[0])
-		_, err := io.ReadFull(c, res)
-		if err != nil {
-			slog.Error(fmt.Sprintf("[fleet] p2p failed to get protocol error: %s", err), "event", "fleet:service:get_fail")
-			c.Close()
-			return nil, err
-		}
-		c.Close()
-		slog.Error(fmt.Sprintf("[fleet] p2p failed with remote error: %s", res), "event", "fleet:service:remote_error")
-		return nil, errors.New(string(res))
-	}
-
-	// success
-	return &ServiceConn{Conn: c}, nil
+	return &quicBundle{Stream: conn, c: res}, nil
 }
 
 func (a *Agent) AddService(service string) chan net.Conn {
@@ -124,56 +99,6 @@ func (a *Agent) AddService(service string) chan net.Conn {
 	a.services[service] = make(chan net.Conn)
 
 	return a.services[service]
-}
-
-func (a *Agent) handleServiceConn(tc *tls.Conn) {
-	res := make([]byte, 1)
-	_, err := io.ReadFull(tc, res)
-	if err != nil {
-		slog.Error(fmt.Sprintf("[fleet] incoming p2p link: failed to get service name length"), "event", "fleet:service:name_len_fail")
-		tc.Close()
-		return
-	}
-
-	if res[0] == 0 {
-		// ???
-		slog.Error(fmt.Sprintf("[fleet] incoming p2p link: failed to get service name (zero length)"), "event", "fleet:service:name_zero_len")
-		tc.Close()
-		return
-	}
-
-	res = make([]byte, res[0])
-
-	_, err = io.ReadFull(tc, res)
-	if err != nil {
-		slog.Error(fmt.Sprintf("[fleet] incoming p2p link: failed to get service name: %s", err), "event", "fleet:service:name_read_fail")
-		tc.Close()
-		return
-	}
-
-	a.forwardConnection(string(res), tc)
-}
-
-func (a *Agent) forwardConnection(service string, c net.Conn) {
-	a.svcMutex.RLock()
-	defer a.svcMutex.RUnlock()
-
-	ch, ok := a.services[service]
-	if !ok {
-		err := []byte("no such service")
-		c.Write(append([]byte{byte(len(err))}, err...))
-		slog.Error(fmt.Sprintf("[fleet] p2p connection to service %s rejected (no such service)", service), "event", "fleet:service:notfound")
-		c.Close()
-		return
-	}
-
-	// signal success
-	_, err := c.Write([]byte{0})
-	if err != nil {
-		slog.Error(fmt.Sprintf("[fleet] p2p connection failed to notify success: %s", err), "event", "fleet:service:success_notify_fail")
-	}
-
-	ch <- &ServiceConn{Conn: c}
 }
 
 func (a *Agent) getService(service string) chan net.Conn {

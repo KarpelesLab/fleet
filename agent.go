@@ -11,13 +11,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math/rand"
 	"net"
 	"net/http"
 	"os"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -29,14 +27,13 @@ import (
 	"github.com/KarpelesLab/rchan"
 	"github.com/KarpelesLab/spotlib"
 	"github.com/KarpelesLab/tpmlib"
+	"github.com/quic-go/quic-go"
 	bolt "go.etcd.io/bbolt"
 )
 
 type GetFileFunc func(*Agent, string) ([]byte, error)
 
 type Agent struct {
-	socket net.Listener
-
 	id       string
 	name     string
 	division string
@@ -44,6 +41,7 @@ type Agent struct {
 	IP       string // ip as seen from outside
 	cache    string // location of cache
 	spot     *spotlib.Client
+	quicT    *quic.Transport
 	Events   *emitter.Hub
 	group    []byte // Spot group key we are a member of
 
@@ -56,7 +54,6 @@ type Agent struct {
 	peers      map[string]*Peer
 	peersMutex sync.RWMutex
 	peersCount uint32
-	port       int // random
 
 	services  map[string]chan net.Conn
 	svcMutex  sync.RWMutex
@@ -119,7 +116,6 @@ func spawn() *Agent {
 	a := &Agent{
 		id:          local,
 		name:        local,
-		port:        61337,
 		peers:       make(map[string]*Peer),
 		services:    make(map[string]chan net.Conn),
 		dbWatch:     make(map[string][]DbWatchCallback),
@@ -228,18 +224,6 @@ func (a *Agent) doInit(token *jwt.Token) (err error) {
 	a.inCfg.ClientAuth = tls.RequireAndVerifyClientCert
 	a.inCfg.ClientCAs = a.ca
 
-	if a.socket == nil {
-		sock, err := net.ListenTCP("tcp", &net.TCPAddr{Port: a.port})
-		if err != nil {
-			slog.Error(fmt.Sprintf("[agent] failed to listen: %s", err), "event", "fleet:agent:listen_fail")
-			return err
-		}
-		// update a.port (will be the same value if it wasn't 0)
-		a.port = sock.Addr().(*net.TCPAddr).Port
-		a.socket = tls.NewListener(sock, a.inCfg)
-		slog.Debug(fmt.Sprintf("[agent] Listening on :%d", a.port), "event", "fleet:agent:listen")
-	}
-
 	// create a transport object for http queries
 	a.transport = &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
@@ -251,7 +235,6 @@ func (a *Agent) doInit(token *jwt.Token) (err error) {
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 
-	go a.listenLoop()
 	go a.eventLoop()
 
 	return
@@ -918,76 +901,6 @@ func (a *Agent) handleRpcResponse(pkt *PacketRpcResponse) error {
 	}
 }
 
-// DialPeer will connect to a given host and attempt to negociate a connection. Do not use unless
-// you know what you are doing. id can be left empty if unknown.
-func (a *Agent) DialPeer(host string, port int, id string, alt ...string) {
-	cfg := a.outCfg.Clone()
-	cfg.ServerName = id
-	cfg.NextProtos = []string{"fssh", "fbin"}
-
-	// handle alt IPs and try these first
-	if len(alt) > 0 {
-		// typically alt ips are in the CIDR format, we want to re-format these as host:port
-		c, err := tlsDialAll(context.Background(), 5*time.Second, formatAltAddrs(host, alt, port), cfg)
-		if err == nil {
-			// success!
-			go a.newConn(c, false)
-			return
-		}
-		slog.Debug(fmt.Sprintf("[fleet] Alt connection failed, will attempt regular connection: %s", err), "event", "fleet:agent:altfail")
-	}
-
-	c, err := tls.Dial("tcp", host+":"+strconv.FormatInt(int64(port), 10), cfg)
-	if err != nil {
-		slog.Warn(fmt.Sprintf("[fleet] failed to manually connect to peer %s: %s", id, err), "event", "fleet:agent:conn_fail")
-		return
-	}
-
-	go a.newConn(c, false)
-}
-
-func (a *Agent) dialPeer(host string, port int, name string, id string, alt []string) {
-	if id == a.id {
-		// avoid connect to self
-		return
-	}
-	if port == 0 {
-		port = a.port
-	}
-
-	// random delay before connect
-	time.Sleep(time.Duration(rand.Intn(1500)+200) * time.Millisecond)
-
-	// check if already connected
-	if a.IsConnected(id) {
-		return
-	}
-
-	cfg := a.outCfg.Clone()
-	cfg.ServerName = id
-	cfg.NextProtos = []string{"fssh", "fbin"}
-
-	// handle alt IPs and try these first
-	if len(alt) > 0 {
-		// typically alt ips are in the CIDR format, we want to re-format these as host:port
-		c, err := tlsDialAll(context.Background(), 5*time.Second, formatAltAddrs(host, alt, port), cfg)
-		if err == nil {
-			// success!
-			go a.newConn(c, false)
-			return
-		}
-		slog.Debug(fmt.Sprintf("[fleet] Alt connection failed, will attempt regular connection: %s", err), "event", "fleet:agent:altfail")
-	}
-
-	c, err := tls.Dial("tcp", host+":"+strconv.FormatInt(int64(port), 10), cfg)
-	if err != nil {
-		slog.Warn(fmt.Sprintf("[fleet] failed to connect to peer %s(%s): %s", name, id, err), "event", "fleet:agent:conn_fail")
-		return
-	}
-
-	go a.newConn(c, false)
-}
-
 func (a *Agent) IsConnected(id string) bool {
 	if id == a.id {
 		// we are "connected" to self
@@ -999,24 +912,24 @@ func (a *Agent) IsConnected(id string) bool {
 	return ok
 }
 
-func (a *Agent) listenLoop() {
-	for {
-		conn, err := a.socket.Accept()
-		if err != nil {
-			slog.Error(fmt.Sprintf("[fleet] failed to accept connections: %s", err), "event", "fleet:agent:accept_fail")
-			return
-		}
-
-		go a.newConn(conn, true)
-	}
-}
-
 func (a *Agent) eventLoop() {
 	announce := time.NewTicker(30 * time.Second)
 
 	for range announce.C {
 		a.doAnnounce()
 	}
+}
+
+func (a *Agent) makeAnnouncePacket() *PacketAnnounce {
+	pkt := &PacketAnnounce{
+		Id:   a.id,
+		Now:  time.Now(),
+		Idx:  0,
+		AZ:   a.division,
+		NumG: uint32(runtime.NumGoroutine()),
+		Meta: a.copyMeta(), // TODO we do not need to copy that
+	}
+	return pkt
 }
 
 func (a *Agent) doAnnounce() {
@@ -1086,7 +999,6 @@ func (a *Agent) DumpInfo(w io.Writer) {
 		fmt.Fprintf(w, "Division: %s\n", p.division)
 		fmt.Fprintf(w, "Endpoint: %s\n", p.RemoteAddr())
 		fmt.Fprintf(w, "Connected:%s (%s ago)\n", p.cnx, time.Since(p.cnx))
-		fmt.Fprintf(w, "Protocol: %s\n", p.protocol)
 		fmt.Fprintf(w, "Last Ann: %s\n", time.Since(p.annTime))
 		fmt.Fprintf(w, "Latency:  %s\n", p.Ping)
 		fmt.Fprintf(w, "Offset:   %s\n", p.timeOfft)

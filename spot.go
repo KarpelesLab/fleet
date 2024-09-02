@@ -2,6 +2,7 @@ package fleet
 
 import (
 	"fmt"
+	"log"
 	"log/slog"
 	"path"
 	"runtime/debug"
@@ -9,6 +10,8 @@ import (
 	"github.com/KarpelesLab/cryptutil"
 	"github.com/KarpelesLab/spotlib"
 	"github.com/KarpelesLab/spotproto"
+	"github.com/fxamacker/cbor/v2"
+	"github.com/quic-go/quic-go"
 )
 
 func (a *Agent) initSpot() {
@@ -34,7 +37,18 @@ func (a *Agent) initSpot() {
 	// we use spot's events handler so some events like "status" (0|1) are easily available
 	a.Events = a.spot.Events
 
+	pkt, err := a.spot.ListenPacket("fleet-packet")
+	if err != nil {
+		log.Printf("no? err=%s", err)
+	} else {
+		a.quicT = &quic.Transport{
+			Conn:               pkt,
+			ConnectionIDLength: 4,
+		}
+	}
+
 	a.spot.SetHandler("ping", a.spotPingHandler)
+	a.spot.SetHandler("fleet-announce", a.spotAnnounceHandler)
 }
 
 func (a *Agent) shutdownSpot() {
@@ -46,4 +60,10 @@ func (a *Agent) shutdownSpot() {
 
 func (a *Agent) spotPingHandler(msg *spotproto.Message) ([]byte, error) {
 	return msg.Body, nil
+}
+
+func (a *Agent) spotAnnounceHandler(msg *spotproto.Message) ([]byte, error) {
+	// return announce packet
+	pkt := a.makeAnnouncePacket()
+	return cbor.Marshal(pkt)
 }

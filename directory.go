@@ -6,18 +6,12 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
-	"net/http"
-	"net/url"
 	"runtime/debug"
-	"sync/atomic"
 	"time"
 
-	"github.com/KarpelesLab/goupd"
 	"github.com/KarpelesLab/jwt"
 )
 
@@ -125,131 +119,34 @@ func (a *Agent) directoryThreadStart() bool {
 	}
 
 	sgr := jwtInfo.Payload().GetString("sgr") // Spot Group (sha256 hash as hex)
-	if sgr != "" {
-		// new process, use spot instead of directory to find & talk with other peers
-		groupHash, err := hex.DecodeString(sgr)
-		if err == nil && len(groupHash) == 32 {
-			// let's make sure we're in the group
-			id := a.spot.IDCard()
-			found := false
-			for _, m := range id.Groups {
-				mh := sha256.Sum256(m.Key)
-				if bytes.Equal(mh[:], groupHash) {
-					a.group = m.Key
-					found = true
-				}
-			}
-			if found {
-				// do not ping directory, let's assume we're good now
-				a.setStatus(1)
-				return true
-			}
-		}
-	}
-
-	dir := jwtInfo.Payload().GetString("aud") // Audience
-	if dir == "" {
-		slog.Error("[fleet] directory failed to load: aud claim not found", "event", "fleet:directory:aud_missing")
+	if sgr == "" {
+		slog.Error(fmt.Sprintf("[fleet] JWT missing SpotGroup"), "event", "fleet:directory:jwt_sgr_missing")
 		return false
 	}
 
-	// jwt contains our jwt token, load the certificate too
-	cfg, err := a.GetClientTlsConfig()
-	if err != nil {
-		slog.Error(fmt.Sprintf("[fleet] failed to get client TLS certificate, directory service disabled: %s", err), "event", "fleet:directory:tls_fail")
+	// new process, use spot instead of directory to find & talk with other peers
+	groupHash, err := hex.DecodeString(sgr)
+	if err != nil || len(groupHash) != 32 {
+		slog.Error(fmt.Sprintf("[fleet] bad groupHash value: %s", err), "event", "fleet:directory:jwt_sgr_decode_error")
 		return false
 	}
 
-	tr := &http.Transport{
-		TLSClientConfig: cfg,
-		MaxIdleConns:    10,
-		IdleConnTimeout: 120 * time.Second,
-	}
-	client := &http.Client{Transport: tr}
-
-	a.setStatus(1)
-
-	go func() {
-		for {
-			// connect to directory, ping, etc
-			err = a.jwtPingDirectory(dir, jwtData, client)
-			if err != nil {
-				slog.Warn(fmt.Sprintf("[fleet] ping failed: %s", err), "event", "fleet:directory:ping_fail")
-			}
-			time.Sleep(60 * time.Second)
+	// let's make sure we're in the group
+	id := a.spot.IDCard()
+	found := false
+	for _, m := range id.Groups {
+		mh := sha256.Sum256(m.Key)
+		if bytes.Equal(mh[:], groupHash) {
+			a.group = m.Key
+			found = true
 		}
-	}()
-	return true
-}
-
-func (a *Agent) jwtPingDirectory(dir string, jwt []byte, client *http.Client) error {
-	u := &url.URL{
-		Scheme: "https",
-		Host:   dir,
-		Path:   "/ping",
 	}
-
-	// post body
-	post := map[string]any{
-		"Name":     a.name,
-		"Location": a.division,
-		"Version":  goupd.CHANNEL + "/" + goupd.DATE_TAG + "/" + goupd.GIT_TAG,
-		"Time":     time.Now().UnixMicro(), // in ms
-		"AltIPs":   getLocalIPs(),
-		"Port":     a.port,
-		"Private": &directoryPrivate{
-			Id:       a.id,
-			Division: a.division,
-		},
+	if found {
+		// do not ping directory, let's assume we're good now
+		a.setStatus(1)
+		return true
 	}
-	postJson, err := json.Marshal(post)
-	if err != nil {
-		return err
-	}
-
-	//log.Printf("[ping] %s", u)
-	req, err := http.NewRequest("POST", u.String(), bytes.NewReader(postJson))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+string(jwt))
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	var res *directoryPingResponse
-
-	if resp.StatusCode > 299 {
-		buf, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("invalid response from server: %s (data: %s)", resp.Status, buf)
-	}
-
-	dec := json.NewDecoder(resp.Body)
-	err = dec.Decode(&res)
-	if err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	// {"Myself":{"Name":"jp001","Version":"20211010151149/8fed26f","TimeOffset":53348333,"Private":{"Division":"clfd-qepiqm-ufgr-hh3d-v4p5-twwxysdy","Id":"clfdh-d27zrv-bymj-fb3i-fn5x-upy5awea"},"LastSeen":"2021-10-10T09:20:12.006662333Z","IP":"13.230.154.155","Token":"
-
-	//log.Printf("[fleet] debug ping response: %+v", res)
-	a.IP = res.Myself.IP
-
-	atomic.StoreUint32(&a.peersCount, uint32(len(res.Namespace.Peers)))
-
-	for _, peer := range res.Namespace.Peers {
-		// check if we're connected
-		if a.IsConnected(peer.Private.Id) {
-			continue
-		}
-		go a.dialPeer(peer.IP, peer.Port, peer.Name, peer.Private.Id, peer.AltIPs)
-	}
-
-	return nil
+	return false
 }
 
 func getLocalIPs() []string {
