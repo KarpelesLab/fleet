@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"runtime"
@@ -55,8 +54,6 @@ type Agent struct {
 	peersMutex sync.RWMutex
 	peersCount uint32
 
-	services  map[string]chan net.Conn
-	svcMutex  sync.RWMutex
 	transport http.RoundTripper
 
 	status     int // 0=waiting 1=ready
@@ -117,7 +114,6 @@ func spawn() *Agent {
 		id:          local,
 		name:        local,
 		peers:       make(map[string]*Peer),
-		services:    make(map[string]chan net.Conn),
 		dbWatch:     make(map[string][]DbWatchCallback),
 		globalLocks: make(map[string]*globalLock),
 	}

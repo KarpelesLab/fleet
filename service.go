@@ -66,6 +66,44 @@ func (b *quicBundle) RemoteAddr() net.Addr {
 	return b.c.RemoteAddr()
 }
 
+func (b *quicBundle) Unwrap() (quic.Connection, quic.Stream) {
+	return b.c, b.Stream
+}
+
+type quicListener struct {
+	parent *quic.Listener
+}
+
+func (q *quicListener) Accept() (net.Conn, error) {
+	ctx := context.Background()
+	c, err := q.parent.Accept(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+
+	s, err := c.AcceptStream(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &quicBundle{Stream: s, c: c}, nil
+}
+
+func (q *quicListener) Addr() net.Addr {
+	return q.parent.Addr()
+}
+
+func (q *quicListener) Close() error {
+	return q.parent.Close()
+}
+
+func (q *quicListener) Unwrap() *quic.Listener {
+	return q.parent
+}
+
 // connect to given peer under specified protocol (if supported)
 func (a *Agent) Connect(id string, service string) (net.Conn, error) {
 	p := a.GetPeer(id)
@@ -92,23 +130,21 @@ func (a *Agent) Connect(id string, service string) (net.Conn, error) {
 	return &quicBundle{Stream: conn, c: res}, nil
 }
 
-func (a *Agent) AddService(service string) chan net.Conn {
-	a.svcMutex.Lock()
-	defer a.svcMutex.Unlock()
-
-	a.services[service] = make(chan net.Conn)
-
-	return a.services[service]
-}
-
-func (a *Agent) getService(service string) chan net.Conn {
-	a.svcMutex.RLock()
-	defer a.svcMutex.RUnlock()
-
-	ch, ok := a.services[service]
-	if !ok {
-		return nil
+func (a *Agent) AddService(service string) (net.Listener, error) {
+	pkt, err := a.spot.ListenPacket(service)
+	if err != nil {
+		return nil, err
+	}
+	t := &quic.Transport{
+		Conn:               pkt,
+		ConnectionIDLength: 4,
 	}
 
-	return ch
+	cfg := a.inCfg.Clone()
+	cfg.ServerName = a.id
+	l, err := t.Listen(cfg, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &quicListener{l}, nil
 }

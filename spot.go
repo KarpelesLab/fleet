@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"path"
 	"runtime/debug"
+	"strings"
 
 	"github.com/KarpelesLab/cryptutil"
 	"github.com/KarpelesLab/spotlib"
@@ -49,6 +50,7 @@ func (a *Agent) initSpot() {
 
 	a.spot.SetHandler("ping", a.spotPingHandler)
 	a.spot.SetHandler("fleet-announce", a.spotAnnounceHandler)
+	a.spot.SetHandler("fleet-fbin", a.spotFbinHandler)
 }
 
 func (a *Agent) shutdownSpot() {
@@ -66,4 +68,22 @@ func (a *Agent) spotAnnounceHandler(msg *spotproto.Message) ([]byte, error) {
 	// return announce packet
 	pkt := a.makeAnnouncePacket()
 	return cbor.Marshal(pkt)
+}
+
+func (a *Agent) spotFbinHandler(msg *spotproto.Message) ([]byte, error) {
+	// got a fbin message from another peer, find it first
+	s := msg.Sender // k:xxx/yyy
+	if pos := strings.IndexByte(s, '/'); pos > 0 {
+		s = s[:pos]
+	}
+	p := a.GetPeer(s)
+	if p == nil {
+		slog.Debug(fmt.Sprintf("[fleet] failed to locate peer %s", s), "event", "fleet:spot:peer_not_found")
+		return nil, nil
+	}
+	err := p.handleIncomingFbin(msg.Body)
+	if err != nil {
+		slog.Debug(fmt.Sprintf("[fleet] incoming packet handling failed: %s", err), "event", "fleet:spot:fbin_err")
+	}
+	return nil, nil
 }
