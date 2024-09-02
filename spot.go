@@ -3,6 +3,8 @@ package fleet
 import (
 	"fmt"
 	"log/slog"
+	"path"
+	"runtime/debug"
 
 	"github.com/KarpelesLab/cryptutil"
 	"github.com/KarpelesLab/spotlib"
@@ -18,7 +20,11 @@ func (a *Agent) initSpot() {
 	if tk, ok := k.(interface{ Keychain() *cryptutil.Keychain }); ok {
 		kc = tk.Keychain()
 	}
-	a.spot, err = spotlib.New(kc, map[string]string{"agent": "go-fleet"})
+	meta := map[string]string{"agent": "go-fleet"}
+	if info, ok := debug.ReadBuildInfo(); ok {
+		meta["project"] = path.Base(info.Path)
+	}
+	a.spot, err = spotlib.New(kc, meta)
 	if err != nil {
 		slog.Debug(fmt.Sprintf("failed to init spot: %s", err), "event", "fleet:spot:init_fail")
 	}
