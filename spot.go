@@ -18,7 +18,7 @@ func (a *Agent) initSpot() {
 	if tk, ok := k.(interface{ Keychain() *cryptutil.Keychain }); ok {
 		kc = tk.Keychain()
 	}
-	a.spot, err = spotlib.New(kc)
+	a.spot, err = spotlib.New(kc, map[string]string{"agent": "go-fleet"})
 	if err != nil {
 		slog.Debug(fmt.Sprintf("failed to init spot: %s", err), "event", "fleet:spot:init_fail")
 	}
