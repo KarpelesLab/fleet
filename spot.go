@@ -37,6 +37,7 @@ func (a *Agent) initSpot() {
 	}
 	// we use spot's events handler so some events like "status" (0|1) are easily available
 	a.Events = a.spot.Events
+	a.kid = a.spot.TargetId()
 
 	pkt, err := a.spot.ListenPacket("fleet-packet")
 	if err != nil {

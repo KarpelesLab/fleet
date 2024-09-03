@@ -52,8 +52,8 @@ type Peer struct {
 	metaLk sync.Mutex
 }
 
-func (a *Agent) makePeer(id *cryptutil.IDCard) {
-	idStr := "k:" + base64.RawURLEncoding.EncodeToString(cryptutil.Hash(id.Self, sha256.New))
+func (a *Agent) makePeer(pid *cryptutil.IDCard) {
+	idStr := "k." + base64.RawURLEncoding.EncodeToString(cryptutil.Hash(pid.Self, sha256.New))
 
 	if idStr == a.id {
 		// avoid connect to self
@@ -65,14 +65,10 @@ func (a *Agent) makePeer(id *cryptutil.IDCard) {
 		return
 	}
 
-	a.spawnPeer(id)
-}
-
-func (a *Agent) spawnPeer(pid *cryptutil.IDCard) {
 	// instanciate peer and fetch certificate
 	p := &Peer{
 		a:         a,
-		id:        "k:" + base64.RawURLEncoding.EncodeToString(cryptutil.Hash(pid.Self, sha256.New)),
+		id:        idStr,
 		idcard:    pid,
 		cnx:       time.Now(),
 		alive:     make(chan struct{}),

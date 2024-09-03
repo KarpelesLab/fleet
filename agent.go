@@ -34,6 +34,7 @@ type GetFileFunc func(*Agent, string) ([]byte, error)
 
 type Agent struct {
 	id       string
+	kid      string // key id (k:...)
 	name     string
 	division string
 	hostname string // only the hostname side
