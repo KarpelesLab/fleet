@@ -62,6 +62,10 @@ func (a *Agent) initSpot() {
 	}
 }
 
+func (a *Agent) Spot() *spotlib.Client {
+	return a.spot
+}
+
 func (a *Agent) shutdownSpot() {
 	if a.spot != nil {
 		a.spot.Close()
