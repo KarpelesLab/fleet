@@ -78,12 +78,16 @@ func (a *Agent) makePeer(pid *cryptutil.IDCard) *Peer {
 	}
 
 	// attempt to fetch announce
-	_, err := p.fetchAnnounce(30 * time.Second)
+	info, err := p.fetchInfo(30 * time.Second)
 	if err != nil {
 		// no response → dead?
 		slog.Debug(fmt.Sprintf("[fleet] failed to test-fetch announce from peer %s: %s", p.id, err), "event", "fleet:peer:ann_fetch_fail")
 		return nil
 	}
+
+	p.name = info.Name
+	p.division = info.Division
+	goupd.SignalVersionChannel(info.Git, info.Build, info.Channel)
 
 	slog.Debug(fmt.Sprintf("[fleet] Connection with peer %s(%s) established", p.name, p.id), "event", "fleet:peer:connected")
 
@@ -115,6 +119,22 @@ func (p *Peer) fetchAnnounce(timeout time.Duration) (*PacketAnnounce, error) {
 		return nil, err
 	}
 	return ann, nil
+}
+
+func (p *Peer) fetchInfo(timeout time.Duration) (*PacketHandshake, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	res, err := p.a.spot.Query(ctx, p.id+"/fleet-info", nil)
+	if err != nil {
+		return nil, err
+	}
+	var info *PacketHandshake
+	err = cbor.Unmarshal(res, &info)
+	if err != nil {
+		return nil, err
+	}
+	return info, nil
 }
 
 func (p *Peer) handleIncomingFbin(buf []byte) error {

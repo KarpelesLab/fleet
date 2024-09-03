@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/KarpelesLab/cryptutil"
+	"github.com/KarpelesLab/goupd"
 	"github.com/KarpelesLab/spotlib"
 	"github.com/KarpelesLab/spotproto"
 	"github.com/fxamacker/cbor/v2"
@@ -39,6 +40,7 @@ func (a *Agent) initSpot() {
 		"ping":           a.spotPingHandler,
 		"fleet-announce": a.spotAnnounceHandler,
 		"fleet-fbin":     a.spotFbinHandler,
+		"fleet-info":     a.spotHandshakeHandler,
 	}
 
 	a.spot, err = spotlib.New(kc, meta, handlers)
@@ -74,6 +76,20 @@ func (a *Agent) spotPingHandler(msg *spotproto.Message) ([]byte, error) {
 func (a *Agent) spotAnnounceHandler(msg *spotproto.Message) ([]byte, error) {
 	// return announce packet
 	pkt := a.makeAnnouncePacket()
+	return cbor.Marshal(pkt)
+}
+
+func (a *Agent) spotHandshakeHandler(msg *spotproto.Message) ([]byte, error) {
+	// return handshake
+	pkt := &PacketHandshake{
+		Id:       a.id,
+		Name:     a.name,
+		Division: a.division,
+		Now:      time.Now(),
+		Git:      goupd.GIT_TAG,
+		Build:    goupd.DATE_TAG,
+		Channel:  goupd.CHANNEL,
+	}
 	return cbor.Marshal(pkt)
 }
 
