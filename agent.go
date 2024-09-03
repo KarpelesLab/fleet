@@ -3,8 +3,10 @@ package fleet
 import (
 	"context"
 	"crypto"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -21,6 +23,7 @@ import (
 	"time"
 
 	"github.com/KarpelesLab/cloudinfo"
+	"github.com/KarpelesLab/cryptutil"
 	"github.com/KarpelesLab/emitter"
 	"github.com/KarpelesLab/jwt"
 	"github.com/KarpelesLab/rchan"
@@ -1002,6 +1005,11 @@ func (a *Agent) DumpInfo(w io.Writer) {
 	fmt.Fprintf(w, "Local name: %s\n", a.name)
 	fmt.Fprintf(w, "Division:   %s\n", a.division)
 	fmt.Fprintf(w, "Local ID:   %s\n", a.id)
+	if a.group != nil {
+		fmt.Fprintf(w, "Group:      %s\n", base64.RawURLEncoding.EncodeToString(cryptutil.Hash(a.group, sha256.New)))
+	} else {
+		fmt.Fprintf(w, "Group:      N/A\n")
+	}
 	if a.spot != nil {
 		conn, online := a.spot.ConnectionCount()
 		fmt.Fprintf(w, "Spot Cnx:   %d/%d\n", online, conn)
