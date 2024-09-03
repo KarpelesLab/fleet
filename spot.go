@@ -1,12 +1,15 @@
 package fleet
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"log/slog"
 	"path"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"github.com/KarpelesLab/cryptutil"
 	"github.com/KarpelesLab/spotlib"
@@ -79,12 +82,42 @@ func (a *Agent) spotFbinHandler(msg *spotproto.Message) ([]byte, error) {
 	}
 	p := a.GetPeer(s)
 	if p == nil {
-		slog.Debug(fmt.Sprintf("[fleet] failed to locate peer %s", s), "event", "fleet:spot:peer_not_found")
-		return nil, nil
+		// check if the id is part of the group
+		if a.group != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			id, err := a.spot.GetIDCardForRecipient(ctx, s)
+			if err == nil {
+				if a.isFriend(id) {
+					// instanciate peer
+					p = a.makePeer(id)
+				}
+			}
+		}
+		// p might not be nil anymore at this point, check
+		if p == nil {
+			slog.Debug(fmt.Sprintf("[fleet] failed to locate peer %s", s), "event", "fleet:spot:peer_not_found")
+			return nil, nil
+		}
 	}
 	err := p.handleIncomingFbin(msg.Body)
 	if err != nil {
 		slog.Debug(fmt.Sprintf("[fleet] incoming packet handling failed: %s", err), "event", "fleet:spot:fbin_err")
 	}
 	return nil, nil
+}
+
+// isFriend returns true if id is member of our group
+func (a *Agent) isFriend(id *cryptutil.IDCard) bool {
+	grp := a.group
+	if grp == nil {
+		return false
+	}
+
+	for _, m := range id.Groups {
+		if bytes.Equal(m.Key, grp) {
+			return true
+		}
+	}
+	return false
 }

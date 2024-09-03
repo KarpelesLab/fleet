@@ -52,17 +52,17 @@ type Peer struct {
 	metaLk sync.Mutex
 }
 
-func (a *Agent) makePeer(pid *cryptutil.IDCard) {
+func (a *Agent) makePeer(pid *cryptutil.IDCard) *Peer {
 	idStr := "k." + base64.RawURLEncoding.EncodeToString(cryptutil.Hash(pid.Self, sha256.New))
 
 	if idStr == a.id {
 		// avoid connect to self
-		return
+		return nil
 	}
 
 	// check if already connected
-	if a.IsConnected(idStr) {
-		return
+	if p := a.GetPeer(idStr); p != nil {
+		return p
 	}
 
 	// instanciate peer and fetch certificate
@@ -81,13 +81,14 @@ func (a *Agent) makePeer(pid *cryptutil.IDCard) {
 	_, err := p.fetchAnnounce(30 * time.Second)
 	if err != nil {
 		// no response → dead?
-		return
+		return nil
 	}
 
 	slog.Debug(fmt.Sprintf("[fleet] Connection with peer %s(%s) established", p.name, p.id), "event", "fleet:peer:connected")
 
 	go p.sendHandshake(context.Background()) // will disappear
 	go p.monitor()
+	return p
 }
 
 func (p *Peer) Addr() net.Addr {
