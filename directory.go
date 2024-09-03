@@ -44,6 +44,8 @@ type directoryPingResponse struct {
 }
 
 func (a *Agent) directoryThread() {
+	a.spot.WaitOnline()
+
 	if a.directoryThreadStart() {
 		return
 	}
