@@ -12,6 +12,7 @@ import (
 	"runtime/debug"
 	"time"
 
+	"github.com/KarpelesLab/cryptutil"
 	"github.com/KarpelesLab/jwt"
 )
 
@@ -149,7 +150,9 @@ func (a *Agent) directoryThreadStart() bool {
 		}
 	}
 	if !found {
-		slog.Error(fmt.Sprintf("[fleet] unable to join group as not member of the group myself"), "event", "fleet:directory:group_join_fail")
+		selfId := base64.RawURLEncoding.EncodeToString(cryptutil.Hash(id.Self, sha256.New))
+		groupId := base64.RawURLEncoding.EncodeToString(groupHash)
+		slog.Error(fmt.Sprintf("[fleet] unable to join group as not member of the group myself; self=%s group=%s", selfId, groupId), "event", "fleet:directory:group_join_fail")
 		return false
 	}
 	// new process
