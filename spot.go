@@ -34,7 +34,14 @@ func (a *Agent) initSpot() {
 	if info, ok := debug.ReadBuildInfo(); ok {
 		meta["project"] = path.Base(info.Path)
 	}
-	a.spot, err = spotlib.New(kc, meta)
+
+	handlers := map[string]spotlib.MessageHandler{
+		"ping":           a.spotPingHandler,
+		"fleet-announce": a.spotAnnounceHandler,
+		"fleet-fbin":     a.spotFbinHandler,
+	}
+
+	a.spot, err = spotlib.New(kc, meta, handlers)
 	if err != nil {
 		slog.Debug(fmt.Sprintf("failed to init spot: %s", err), "event", "fleet:spot:init_fail")
 	}
@@ -51,10 +58,6 @@ func (a *Agent) initSpot() {
 			ConnectionIDLength: 4,
 		}
 	}
-
-	a.spot.SetHandler("ping", a.spotPingHandler)
-	a.spot.SetHandler("fleet-announce", a.spotAnnounceHandler)
-	a.spot.SetHandler("fleet-fbin", a.spotFbinHandler)
 }
 
 func (a *Agent) shutdownSpot() {
