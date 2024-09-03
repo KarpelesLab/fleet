@@ -1002,6 +1002,10 @@ func (a *Agent) DumpInfo(w io.Writer) {
 	fmt.Fprintf(w, "Local name: %s\n", a.name)
 	fmt.Fprintf(w, "Division:   %s\n", a.division)
 	fmt.Fprintf(w, "Local ID:   %s\n", a.id)
+	if a.spot != nil {
+		conn, online := a.spot.ConnectionCount()
+		fmt.Fprintf(w, "Spot Cnx:   %d/%d\n", online, conn)
+	}
 	fmt.Fprintf(w, "Seed ID:    %s (seed stamp: %s)\n", a.SeedId(), a.seed.ts)
 	if tk, err := tpmlib.GetKey(); err == nil {
 		// we have a tpm key
