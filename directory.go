@@ -121,6 +121,8 @@ func (a *Agent) directoryThreadStart() bool {
 	sgr := jwtInfo.Payload().GetString("sgr") // Spot Group (sha256 hash as hex)
 	if sgr == "" {
 		slog.Error(fmt.Sprintf("[fleet] JWT missing SpotGroup"), "event", "fleet:directory:jwt_sgr_missing")
+		slog.Info("[fleet] removing invalid jwt from database", "event", "fleet:directory:jwt_expunge")
+		a.dbFleetDel("internal_key:jwt")
 		return false
 	}
 
