@@ -81,6 +81,7 @@ func (a *Agent) makePeer(pid *cryptutil.IDCard) *Peer {
 	_, err := p.fetchAnnounce(30 * time.Second)
 	if err != nil {
 		// no response → dead?
+		slog.Debug(fmt.Sprintf("[fleet] failed to test-fetch announce from peer %s: %s", p.id, err), "event", "fleet:peer:ann_fetch_fail")
 		return nil
 	}
 

@@ -254,13 +254,14 @@ func (a *Agent) updateGroupInfo() {
 
 	members, err := a.spot.GetGroupMembers(ctx, a.group)
 	if err != nil {
-		slog.Debug(fmt.Sprintf("failed to fetch group members: %s", err), "event", "fleet:group:fail")
+		slog.Debug(fmt.Sprintf("[fleet] failed to fetch group members: %s", err), "event", "fleet:group:fail")
 		return
 	}
 
 	for _, id := range members {
 		if a.GetPeer(id) == nil {
 			// add it
+			slog.Debug(fmt.Sprintf("[fleet] attempting to reach peer %s", id), "event", "fleet:group:connect_peer")
 			id, err := a.spot.GetIDCardForRecipient(ctx, id)
 			if err == nil {
 				go a.makePeer(id)
