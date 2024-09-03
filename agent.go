@@ -938,6 +938,14 @@ func (a *Agent) IsConnected(id string) bool {
 	return ok
 }
 
+func (a *Agent) eventLoop() {
+	announce := time.NewTicker(30 * time.Second)
+
+	for range announce.C {
+		a.doAnnounce()
+	}
+}
+
 func (a *Agent) makeAnnouncePacket() *PacketAnnounce {
 	pkt := &PacketAnnounce{
 		Id:   a.id,
@@ -948,6 +956,44 @@ func (a *Agent) makeAnnouncePacket() *PacketAnnounce {
 		Meta: a.copyMeta(), // TODO we do not need to copy that
 	}
 	return pkt
+}
+
+func (a *Agent) doAnnounce() {
+	peers := a.GetPeers()
+
+	if len(peers) == 0 {
+		return
+	}
+
+	x := atomic.AddUint64(&a.announceIdx, 1)
+
+	pkt := &PacketAnnounce{
+		Id:   a.id,
+		Now:  time.Now(),
+		Idx:  x,
+		AZ:   a.division,
+		NumG: uint32(runtime.NumGoroutine()),
+		Meta: a.copyMeta(),
+	}
+
+	//log.Printf("[agent] broadcasting announce %+v to %d peers", pkt, len(peers))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var wg sync.WaitGroup
+
+	for _, p := range peers {
+		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
+		wg.Add(1)
+		go func(p *Peer) {
+			defer wg.Done()
+			err := p.Send(ctx, pkt)
+			if err != nil {
+				slog.Warn(fmt.Sprintf("[agent] failed to send announce to %s: %s", p.id, err), "event", "fleet:agent:announce_fail")
+			}
+		}(p)
+	}
+	wg.Wait()
 }
 
 func (a *Agent) DumpInfo(w io.Writer) {
