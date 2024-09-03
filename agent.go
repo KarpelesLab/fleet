@@ -969,7 +969,7 @@ func (a *Agent) makeAnnouncePacket() *PacketAnnounce {
 }
 
 func (a *Agent) doAnnounce() {
-	peers := a.GetPeers()
+	peers := a.getAllPeers()
 
 	if len(peers) == 0 {
 		return
@@ -1114,6 +1114,20 @@ func (a *Agent) GetPeers() []*Peer {
 		if p.IsAlive() {
 			res = append(res, p)
 		}
+	}
+
+	sort.Sort(sortablePeers(res))
+
+	return res
+}
+
+func (a *Agent) getAllPeers() []*Peer {
+	a.peersMutex.RLock()
+	defer a.peersMutex.RUnlock()
+
+	res := make([]*Peer, 0, len(a.peers))
+	for _, p := range a.peers {
+		res = append(res, p)
 	}
 
 	sort.Sort(sortablePeers(res))

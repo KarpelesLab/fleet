@@ -102,7 +102,7 @@ func (p *Peer) Addr() net.Addr {
 
 func (p *Peer) IsAlive() bool {
 	// we perform fetchAnnounce once per minute
-	return time.Since(p.annTime) > 5*time.Minute
+	return time.Since(p.annTime) < 5*time.Minute
 }
 
 func (p *Peer) fetchAnnounce(timeout time.Duration) (*PacketAnnounce, error) {
