@@ -258,7 +258,12 @@ func (a *Agent) updateGroupInfo() {
 		return
 	}
 
+	slog.Debug(fmt.Sprintf("[fleet] group update, found %d members", len(members)), "event", "fleet:group:info")
+
 	for _, id := range members {
+		if id == a.id {
+			continue
+		}
 		if a.GetPeer(id) == nil {
 			// add it
 			slog.Debug(fmt.Sprintf("[fleet] attempting to reach peer %s", id), "event", "fleet:group:connect_peer")
