@@ -34,7 +34,6 @@ type GetFileFunc func(*Agent, string) ([]byte, error)
 
 type Agent struct {
 	id       string
-	kid      string // key id (k:...)
 	name     string
 	division string
 	hostname string // only the hostname side
@@ -188,9 +187,7 @@ func (a *Agent) InternalKey() (crypto.Signer, error) {
 func (a *Agent) doInit(token *jwt.Token) (err error) {
 	if token != nil {
 		// update info based on jwt data
-		if id := token.Payload().GetString("id"); id != "" {
-			a.id = id
-		}
+		a.id = a.spot.TargetId()
 		if name := token.Payload().GetString("nam"); name != "" {
 			a.name = name
 		}
@@ -232,9 +229,42 @@ func (a *Agent) doInit(token *jwt.Token) (err error) {
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 
-	go a.eventLoop()
-
 	return
+}
+
+func (a *Agent) setGroupHash(groupHash []byte) {
+	a.group = groupHash
+
+	go a.watchGroup()
+}
+
+func (a *Agent) watchGroup() {
+	for {
+		a.updateGroupInfo()
+		time.Sleep(300 * time.Second)
+	}
+}
+
+func (a *Agent) updateGroupInfo() {
+	// find members of group
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	members, err := a.spot.GetGroupMembers(ctx, a.group)
+	if err != nil {
+		slog.Debug(fmt.Sprintf("failed to fetch group members: %s", err), "event", "fleet:group:fail")
+		return
+	}
+
+	for _, id := range members {
+		if a.GetPeer(id) == nil {
+			// add it
+			id, err := a.spot.GetIDCardForRecipient(ctx, id)
+			if err == nil {
+				go a.makePeer(id)
+			}
+		}
+	}
 }
 
 // Id returns the id of the local node
@@ -909,14 +939,6 @@ func (a *Agent) IsConnected(id string) bool {
 	return ok
 }
 
-func (a *Agent) eventLoop() {
-	announce := time.NewTicker(30 * time.Second)
-
-	for range announce.C {
-		a.doAnnounce()
-	}
-}
-
 func (a *Agent) makeAnnouncePacket() *PacketAnnounce {
 	pkt := &PacketAnnounce{
 		Id:   a.id,
@@ -927,44 +949,6 @@ func (a *Agent) makeAnnouncePacket() *PacketAnnounce {
 		Meta: a.copyMeta(), // TODO we do not need to copy that
 	}
 	return pkt
-}
-
-func (a *Agent) doAnnounce() {
-	peers := a.GetPeers()
-
-	if len(peers) == 0 {
-		return
-	}
-
-	x := atomic.AddUint64(&a.announceIdx, 1)
-
-	pkt := &PacketAnnounce{
-		Id:   a.id,
-		Now:  time.Now(),
-		Idx:  x,
-		AZ:   a.division,
-		NumG: uint32(runtime.NumGoroutine()),
-		Meta: a.copyMeta(),
-	}
-
-	//log.Printf("[agent] broadcasting announce %+v to %d peers", pkt, len(peers))
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	var wg sync.WaitGroup
-
-	for _, p := range peers {
-		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
-		wg.Add(1)
-		go func(p *Peer) {
-			defer wg.Done()
-			err := p.Send(ctx, pkt)
-			if err != nil {
-				slog.Warn(fmt.Sprintf("[agent] failed to send announce to %s: %s", p.id, err), "event", "fleet:agent:announce_fail")
-			}
-		}(p)
-	}
-	wg.Wait()
 }
 
 func (a *Agent) DumpInfo(w io.Writer) {
@@ -1061,7 +1045,9 @@ func (a *Agent) GetPeers() []*Peer {
 
 	res := make([]*Peer, 0, len(a.peers))
 	for _, p := range a.peers {
-		res = append(res, p)
+		if p.IsAlive() {
+			res = append(res, p)
+		}
 	}
 
 	sort.Sort(sortablePeers(res))

@@ -76,9 +76,11 @@ func (a *Agent) makePeer(pid *cryptutil.IDCard) {
 		annTime:   time.Now(),
 		valid:     true,
 	}
-	if p.id == a.id {
-		slog.Debug("[fleet] connected to self, closing", "event", "fleet:peer:talking_to_self")
-		p.c.Close()
+
+	// attempt to fetch announce
+	_, err := p.fetchAnnounce(30 * time.Second)
+	if err != nil {
+		// no response → dead?
 		return
 	}
 
@@ -90,6 +92,11 @@ func (a *Agent) makePeer(pid *cryptutil.IDCard) {
 
 func (p *Peer) Addr() net.Addr {
 	return spotlib.SpotAddr(p.id)
+}
+
+func (p *Peer) IsAlive() bool {
+	// we perform fetchAnnounce once per minute
+	return time.Since(p.annTime) > 5*time.Minute
 }
 
 func (p *Peer) fetchAnnounce(timeout time.Duration) (*PacketAnnounce, error) {

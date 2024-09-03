@@ -1,6 +1,8 @@
 module github.com/KarpelesLab/fleet
 
-go 1.22.2
+go 1.23
+
+toolchain go1.23.0
 
 require (
 	github.com/KarpelesLab/cloudinfo v0.1.6
@@ -10,9 +12,10 @@ require (
 	github.com/KarpelesLab/jwt v0.1.11
 	github.com/KarpelesLab/rchan v1.0.1
 	github.com/KarpelesLab/ringbuf v0.1.2
-	github.com/KarpelesLab/spotlib v0.1.4
-	github.com/KarpelesLab/spotproto v0.1.7
+	github.com/KarpelesLab/spotlib v0.2.0
+	github.com/KarpelesLab/spotproto v0.2.0
 	github.com/KarpelesLab/tpmlib v0.1.4
+	github.com/fxamacker/cbor/v2 v2.7.0
 	github.com/google/go-tpm v0.9.1
 	github.com/google/go-tpm-tools v0.4.4
 	github.com/google/uuid v1.6.0
@@ -28,7 +31,6 @@ require (
 	github.com/KarpelesLab/webutil v0.2.1 // indirect
 	github.com/ModChain/edwards25519 v1.0.0 // indirect
 	github.com/coder/websocket v1.8.12 // indirect
-	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/go-configfs-tsm v0.3.2 // indirect

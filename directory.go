@@ -143,6 +143,7 @@ func (a *Agent) directoryThreadStart() bool {
 	}
 	if found {
 		// do not ping directory, let's assume we're good now
+		a.setGroupHash(groupHash)
 		a.setStatus(1)
 		return true
 	}
