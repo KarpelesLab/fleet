@@ -238,6 +238,7 @@ func (a *Agent) setGroup(group []byte) {
 	a.group = group
 
 	go a.watchGroup()
+	go a.eventLoop()
 }
 
 func (a *Agent) watchGroup() {
