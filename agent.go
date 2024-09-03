@@ -52,7 +52,6 @@ type Agent struct {
 
 	peers      map[string]*Peer
 	peersMutex sync.RWMutex
-	peersCount uint32
 
 	transport http.RoundTripper
 
@@ -1036,7 +1035,9 @@ func (a *Agent) CountPeers() int {
 // value may be more than the number of entries GetPeers will return as some
 // peers may be down or unavailable.
 func (a *Agent) GetPeersCount() uint32 {
-	return atomic.LoadUint32(&a.peersCount)
+	a.peersMutex.RLock()
+	defer a.peersMutex.RUnlock()
+	return uint32(len(a.peers))
 }
 
 func (a *Agent) GetPeers() []*Peer {
