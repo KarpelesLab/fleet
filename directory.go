@@ -130,26 +130,30 @@ func (a *Agent) directoryThreadStart() bool {
 	groupHash, err := hex.DecodeString(sgr)
 	if err != nil || len(groupHash) != 32 {
 		slog.Error(fmt.Sprintf("[fleet] bad groupHash value: %s", err), "event", "fleet:directory:jwt_sgr_decode_error")
+		slog.Info("[fleet] removing invalid jwt from database", "event", "fleet:directory:jwt_expunge")
+		a.dbFleetDel("internal_key:jwt")
 		return false
 	}
 
 	// let's make sure we're in the group
 	id := a.spot.IDCard()
+	var group []byte
 	found := false
 	for _, m := range id.Groups {
 		mh := sha256.Sum256(m.Key)
 		if bytes.Equal(mh[:], groupHash) {
-			a.group = m.Key
+			group = m.Key
 			found = true
 		}
 	}
-	if found {
-		// do not ping directory, let's assume we're good now
-		a.setGroupHash(groupHash)
-		a.setStatus(1)
-		return true
+	if !found {
+		slog.Error(fmt.Sprintf("[fleet] unable to join group as not member of the group myself"), "event", "fleet:directory:group_join_fail")
+		return false
 	}
-	return false
+	// new process
+	a.setGroup(group)
+	a.setStatus(1)
+	return true
 }
 
 func getLocalIPs() []string {

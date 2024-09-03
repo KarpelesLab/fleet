@@ -234,8 +234,8 @@ func (a *Agent) doInit(token *jwt.Token) (err error) {
 	return
 }
 
-func (a *Agent) setGroupHash(groupHash []byte) {
-	a.group = groupHash
+func (a *Agent) setGroup(group []byte) {
+	a.group = group
 
 	go a.watchGroup()
 }
