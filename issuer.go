@@ -104,6 +104,11 @@ func WithIssuer(url string, opts ...AgentOption) *Agent {
 		defer resp.Body.Close()
 
 		if resp.StatusCode != 200 {
+			// check if we have a X-Request-Id header in the response
+			reqId := resp.Header.Get("X-Request-Id")
+			if reqId != "" {
+				return nil, fmt.Errorf("failed to read %s: %s (request id: %s)", f, resp.Status, reqId)
+			}
 			return nil, fmt.Errorf("failed to read %s: %s", f, resp.Status)
 		}
 
