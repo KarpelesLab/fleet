@@ -8,6 +8,8 @@ github.com/KarpelesLab/cryptutil v0.2.24 h1:kD4NvTxqYUWK/AtS3RQ16Sz97WXuy7nIIwCD
 github.com/KarpelesLab/cryptutil v0.2.24/go.mod h1:2gBM1JlpscOqYSE08hoOug3pFpR2Hh6EV/6aK7ZANqQ=
 github.com/KarpelesLab/cryptutil v0.2.25 h1:ZgX9NXxIgmEEnkCI3zGJYwXlqrlhXfqf/nGmGMERrUM=
 github.com/KarpelesLab/cryptutil v0.2.25/go.mod h1:2gBM1JlpscOqYSE08hoOug3pFpR2Hh6EV/6aK7ZANqQ=
+github.com/KarpelesLab/cryptutil v0.2.26 h1:fRCHexUUdz6y3QGIYk5BsSmE2PQOHmBhH0SG63iNI0s=
+github.com/KarpelesLab/cryptutil v0.2.26/go.mod h1:2gBM1JlpscOqYSE08hoOug3pFpR2Hh6EV/6aK7ZANqQ=
 github.com/KarpelesLab/emitter v0.1.0 h1:MQqtI4B4linBLuvPlXXb3wB4ujtCw5yDeFQwTwCsAHA=
 github.com/KarpelesLab/emitter v0.1.0/go.mod h1:JOaQADpNVN0OJfhkDurRCUkMEotPM8Pukh3DadTOY+4=
 github.com/KarpelesLab/goupd v0.2.5 h1:qgaNUmgOxYquVsiXKVLywOB7pH6PSCo1TzSFj1cybWE=
@@ -76,6 +78,8 @@ github.com/KarpelesLab/tpmlib v0.1.2 h1:f22/c22mXaWCHgiNUbVmzIRP79BmdMBbA5xX7p/Q
 github.com/KarpelesLab/tpmlib v0.1.2/go.mod h1:MA8nOp4lm3cDOyOML2DUVhEG2S2hgM99AAtxJz4SSgc=
 github.com/KarpelesLab/tpmlib v0.1.4 h1:rvVqZJGzX+jLqQBErejanLYsPBK/X/gCz0Z9NoAldrI=
 github.com/KarpelesLab/tpmlib v0.1.4/go.mod h1:/X151kOZYsX4UPI6xuku+Sgwd1qkMDHpnmWpF0v9MlU=
+github.com/KarpelesLab/tpmlib v0.1.6 h1:aKsPxAPi3vLNoZsNmH4AjCvP3anX8Tm4NKvtcatMCD4=
+github.com/KarpelesLab/tpmlib v0.1.6/go.mod h1:oJDymZ4bbVtAMSTkmcwgBbb7OjjU98bbZ8sOkU/wnbY=
 github.com/KarpelesLab/typutil v0.2.16 h1:uVA+2/NfmQ6nzNsy8Eh4q3AuyWGWnqHKyQ4llbTwt+o=
 github.com/KarpelesLab/typutil v0.2.16/go.mod h1:lqs248XpjFstgZMT5ZVP4/3B6zT7eEeq5kKj4/tC1IQ=
 github.com/KarpelesLab/webutil v0.2.1 h1:5mB+mPBj3iRasv9zY9rDAh00yvKQWJxDOjyUZTjfmlY=
