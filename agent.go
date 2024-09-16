@@ -1052,16 +1052,8 @@ func (a *Agent) DumpInfo(w io.Writer) {
 	fmt.Fprintf(w, "DB keys:\n")
 	for _, bk := range []string{"fleet", "global", "app"} {
 		var l []string
-		if c, err := a.NewDbCursor([]byte(bk)); err == nil {
-			defer c.Close()
-			k, _ := c.First()
-			for {
-				if k == nil {
-					break
-				}
-				l = append(l, string(k))
-				k, _ = c.Next()
-			}
+		for k, _ := range a.DbKeys([]byte(bk), nil) {
+			l = append(l, string(k))
 		}
 		fmt.Fprintf(w, "%s: %v\n", bk, l)
 	}

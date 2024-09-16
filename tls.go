@@ -202,20 +202,11 @@ func (a *Agent) GetCA() (*x509.CertPool, error) {
 	ca := x509.NewCertPool()
 
 	// get records
-	c, err := a.NewDbCursor([]byte("global"))
 	count := 0
 
-	if err == nil {
-		defer c.Close()
-		k, v := c.Seek([]byte("internal:ca:"))
-		for {
-			if k == nil {
-				break
-			}
-			ca.AppendCertsFromPEM(v)
-			count++
-			k, v = c.Next()
-		}
+	for _, v := range a.DbKeys([]byte("global"), []byte("internal:ca:")) {
+		ca.AppendCertsFromPEM(v)
+		count++
 	}
 
 	if count == 0 {
@@ -223,7 +214,7 @@ func (a *Agent) GetCA() (*x509.CertPool, error) {
 		err := a.getFile("internal_ca.pem", func(ca_data []byte) error {
 			ca.AppendCertsFromPEM(ca_data)
 			// store in db
-			err = a.dbSimpleSet([]byte("global"), []byte("internal:ca:legacy_import"), ca_data)
+			a.dbSimpleSet([]byte("global"), []byte("internal:ca:legacy_import"), ca_data)
 			return nil
 		})
 		if err != nil {

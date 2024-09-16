@@ -6,7 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/KarpelesLab/goupd"
@@ -229,26 +229,17 @@ func (a *Agent) dbGetVersion(bucket, key []byte) (val []byte, stamp DbStamp, err
 func (a *Agent) databasePacket() *PacketDbVersions {
 	p := &PacketDbVersions{}
 
-	if c, err := a.NewDbCursor([]byte("version")); err == nil {
+	for k, v := range a.DbKeys([]byte("version"), nil) {
 		// version global key (bucket + NUL + key)
-		defer c.Close()
-		k, v := c.First()
-		for {
-			if k == nil {
-				break
+		k2 := slices.Clone(k)
+		k3 := bytes.SplitN(k2, []byte{0}, 2)
+		if len(k3) == 2 {
+			if string(k3[0]) == "local" || string(k3[0]) == "fleet" {
+				continue
 			}
-			k2 := make([]byte, len(k))
-			copy(k2, k)
-			k3 := bytes.SplitN(k2, []byte{0}, 2)
-			if len(k3) == 2 {
-				if string(k3[0]) == "local" || string(k3[0]) == "fleet" {
-					continue
-				}
-				stamp := DbStamp{}
-				stamp.UnmarshalBinary(v)
-				p.Info = append(p.Info, &PacketDbVersionsEntry{Stamp: stamp, Bucket: k3[0], Key: k3[1]})
-			}
-			k, v = c.Next()
+			stamp := DbStamp{}
+			stamp.UnmarshalBinary(v)
+			p.Info = append(p.Info, &PacketDbVersionsEntry{Stamp: stamp, Bucket: k3[0], Key: k3[1]})
 		}
 	}
 	return p
@@ -357,81 +348,39 @@ func (a *Agent) dbFleetDel(keynames ...string) error {
 	return a.dbSimpleDel([]byte("fleet"), keys...)
 }
 
-type DbCursor struct {
-	tx     *bolt.Tx
-	bucket *bolt.Bucket
-	cursor *bolt.Cursor
-	pfx    []byte
-}
-
-func dbCursorFinalizer(c *DbCursor) {
-	c.tx.Rollback()
-}
-
-func (a *Agent) NewDbCursor(bucket []byte) (*DbCursor, error) {
-	// create a readonly tx and a cursor
-	tx, err := a.db.Begin(false)
-	if err != nil {
-		return nil, err
+func (a *Agent) DbKeys(bucket, prefix []byte) func(yield func(k, v []byte) bool) {
+	return func(yield func(k, v []byte) bool) {
+		a.db.View(func(tx *bolt.Tx) error {
+			b := tx.Bucket(bucket)
+			if b == nil {
+				// no data
+				return nil
+			}
+			c := b.Cursor()
+			if prefix != nil {
+				k, v := c.Seek(prefix)
+				if k == nil {
+					// could not seek?
+					return nil
+				}
+				for k != nil && bytes.HasPrefix(k, prefix) {
+					if !yield(k[len(prefix):], v) {
+						break
+					}
+					k, v = c.Next()
+				}
+				return nil
+			}
+			k, v := c.First()
+			for k != nil {
+				if !yield(k, v) {
+					break
+				}
+				k, v = c.Next()
+			}
+			return nil
+		})
 	}
-
-	r := &DbCursor{tx: tx}
-	runtime.SetFinalizer(r, dbCursorFinalizer)
-
-	r.bucket = tx.Bucket(bucket)
-	if r.bucket == nil {
-		tx.Rollback()
-		return nil, fs.ErrNotExist
-	}
-
-	r.cursor = r.bucket.Cursor()
-	return r, nil
-}
-
-func (c *DbCursor) Seek(pfx []byte) ([]byte, []byte) {
-	c.pfx = pfx
-	k, v := c.cursor.Seek(pfx)
-	if pfx == nil {
-		return k, v
-	}
-	if k == nil {
-		// couldn't seek
-		return nil, nil
-	}
-	if !bytes.HasPrefix(k, pfx) {
-		// key not found
-		return nil, nil
-	}
-
-	return k[len(pfx):], v
-}
-
-func (c *DbCursor) First() ([]byte, []byte) {
-	c.pfx = nil
-	return c.cursor.First()
-}
-
-func (c *DbCursor) Last() ([]byte, []byte) {
-	c.pfx = nil
-	return c.cursor.Last()
-}
-
-func (c *DbCursor) Next() ([]byte, []byte) {
-	k, v := c.cursor.Next()
-	if k == nil {
-		return nil, nil
-	}
-	if c.pfx != nil {
-		if !bytes.HasPrefix(k, c.pfx) {
-			return nil, nil
-		}
-		return k[len(c.pfx):], v
-	}
-	return k, v
-}
-
-func (c *DbCursor) Close() error {
-	return c.tx.Rollback()
 }
 
 func (a *Agent) shutdownDb() {
