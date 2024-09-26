@@ -2,6 +2,7 @@ package fleet
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
@@ -45,7 +46,7 @@ type directoryPingResponse struct {
 }
 
 func (a *Agent) directoryThread() {
-	a.spot.WaitOnline()
+	a.spot.WaitOnline(context.Background())
 
 	if a.directoryThreadStart() {
 		return

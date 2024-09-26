@@ -7,12 +7,12 @@ toolchain go1.23.0
 require (
 	github.com/KarpelesLab/cloudinfo v0.1.6
 	github.com/KarpelesLab/cryptutil v0.2.26
-	github.com/KarpelesLab/emitter v0.1.0
+	github.com/KarpelesLab/emitter v0.2.1
 	github.com/KarpelesLab/goupd v0.4.4
 	github.com/KarpelesLab/jwt v0.1.11
 	github.com/KarpelesLab/rchan v1.0.1
 	github.com/KarpelesLab/ringbuf v0.1.2
-	github.com/KarpelesLab/spotlib v0.2.2
+	github.com/KarpelesLab/spotlib v0.2.7
 	github.com/KarpelesLab/spotproto v0.2.0
 	github.com/KarpelesLab/tpmlib v0.1.6
 	github.com/fxamacker/cbor/v2 v2.7.0
