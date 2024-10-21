@@ -248,6 +248,8 @@ func (p *Peer) handlePacket(pktI Packet) error {
 		p.name = pkt.Name
 		p.division = pkt.Division
 		goupd.SignalVersionChannel(pkt.Git, pkt.Build, pkt.Channel)
+		// write seed back
+		p.WritePacket(ctx, PacketSeed, p.a.seedData())
 		// TODO calculate offset
 		return nil
 	case *PacketAnnounce:
