@@ -264,7 +264,7 @@ func (a *Agent) GetClientTlsConfig() (*tls.Config, error) {
 func (a *Agent) ConfigureTlsServer(cfg *tls.Config) {
 	// perform some basic settings to ensure server is secure
 	cfg.MinVersion = tls.VersionTLS12
-	cfg.CurvePreferences = []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256}
+	cfg.CurvePreferences = []tls.CurveID{tls.X25519MLKEM768, tls.X25519, tls.CurveP521, tls.CurveP384, tls.CurveP256}
 	cfg.CipherSuites = []uint16{
 		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
