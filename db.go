@@ -1,3 +1,4 @@
+// Package fleet provides a distributed peer-to-peer communication framework.
 package fleet
 
 import (
@@ -13,51 +14,102 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-// DB is a local db with data versioned & copied across all members of the fleet through the DB endpoint
-// each regular DB update is pushed to everyone
-// each DB entry has a nanosecond timestamp, if multiple updates of one key are done at the same time they are all kept together
-// any node can ask to replay changes done to the db since any point in time, including zero
-// timestamp for keys are stored in 2x int64 (second, nanosecond), as bigendian when serialized
+// The fleet database system provides a synchronized key-value store across all peers.
+// Each peer maintains a local BoltDB database that is automatically synchronized.
+//
+// Key features:
+// - Data is versioned with nanosecond timestamps
+// - Updates are automatically broadcast to all peers
+// - Conflict resolution based on timestamps
+// - Automatic synchronization on connection establishment
+// - Watch callbacks for database changes
+//
+// Database buckets:
+// - "app": Application data, available to users
+// - "fleet": Fleet internal configuration data
+// - "local": Local-only data that isn't synchronized
+// - "global": System-wide settings
+// - "version": Metadata about record versions
+// - "vlog": Change log for record updates
 
+// DbWatchCallback is a function type for callbacks triggered on database changes.
+// It receives the key that changed and its new value (or nil if deleted).
 type DbWatchCallback func(string, []byte)
 
+// initDb initializes the agent's database connection.
+// This opens or creates a BoltDB database in the user's configuration directory.
+// The database is used for both internal fleet state and application data.
 func (a *Agent) initDb() {
 	// Open the Bolt database located in the config directory
 	d, err := os.UserConfigDir()
 	if err != nil {
 		panic(err)
 	}
+	// Create the project directory if it doesn't exist
 	d = filepath.Join(d, goupd.PROJECT_NAME)
 	EnsureDir(d)
+
+	// Open the database with file permissions set to 0600 (owner read/write only)
 	a.db, err = bolt.Open(filepath.Join(d, "fleet.db"), 0600, nil)
 	if err != nil {
 		panic(err)
 	}
 }
 
-// DbGet will get a value from the shared fleet database
+// DbGet retrieves a value from the shared fleet database.
+// This is the primary method for applications to get data from the synchronized database.
+//
+// Parameters:
+//   - key: The key to retrieve
+//
+// Returns:
+//   - The value as a byte slice
+//   - An error if the key doesn't exist or if the operation fails
 func (a *Agent) DbGet(key string) ([]byte, error) {
 	v, err := a.dbSimpleGet([]byte("app"), []byte(key))
 	return v, err
 }
 
-// DbSet will set a value into the shared fleet database
+// DbSet stores a value in the shared fleet database.
+// This value will be automatically synchronized to all peers in the fleet.
+//
+// Parameters:
+//   - key: The key to store the value under
+//   - value: The data to store
+//
+// Returns:
+//   - An error if the operation fails
 func (a *Agent) DbSet(key string, value []byte) error {
 	return a.feedDbSetBC([]byte("app"), []byte(key), value, DbNow())
 }
 
-// DbDelete will remove a value from the shared fleet database
+// DbDelete removes a value from the shared fleet database.
+// This deletion will be propagated to all peers in the fleet.
+//
+// Parameters:
+//   - key: The key to delete
+//
+// Returns:
+//   - An error if the operation fails
 func (a *Agent) DbDelete(key string) error {
 	return a.feedDbSetBC([]byte("app"), []byte(key), nil, DbNow())
 }
 
-// DbWatch will trigger the cb function upon updates of the given key
-// Special key "*" covers all keys (can only be one callback for a key)
-// If the value is nil, it means it is being deleted
+// DbWatch registers a callback function to be called when a key is updated.
+// The callback will be triggered whenever the specified key changes in the database.
+//
+// Special features:
+// - Using "*" as the key will trigger the callback for all key changes
+// - If the value in the callback is nil, it indicates the key was deleted
+//
+// Parameters:
+//   - key: The key to watch, or "*" for all keys
+//   - cb: Callback function that receives the key and its new value
 func (a *Agent) DbWatch(key string, cb func(string, []byte)) {
 	a.dbWatchLock.Lock()
 	defer a.dbWatchLock.Unlock()
 
+	// Add this callback to the list of watchers for this key
 	a.dbWatch[key] = append(a.dbWatch[key], cb)
 }
 

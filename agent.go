@@ -1,3 +1,6 @@
+// Package fleet provides a distributed peer-to-peer communication framework.
+// It enables automatic peer discovery, secure communication, distributed locks,
+// synchronized database, and remote procedure calls across a network of nodes.
 package fleet
 
 import (
@@ -33,65 +36,78 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
+// GetFileFunc is a callback function type that retrieves files for the agent.
+// Used primarily for certificate and configuration file loading.
 type GetFileFunc func(*Agent, string) ([]byte, error)
 
+// Agent is the core component of the fleet system. It manages connections with peers,
+// handles communication, and coordinates distributed operations.
 type Agent struct {
-	id       string
-	name     string
-	division string
-	hostname string // only the hostname side
-	IP       string // ip as seen from outside
-	cache    string // location of cache
-	spot     *spotlib.Client
-	quicT    *quic.Transport
-	Events   *emitter.Hub
-	group    []byte // Spot group key we are a member of
+	// Identity properties
+	id       string // Unique identifier for this agent
+	name     string // Human-readable name
+	division string // Logical grouping/location for this agent (e.g., "datacenter/region/rack")
+	hostname string // Only the hostname portion of FQDN
+	IP       string // IP address as seen from outside
+	cache    string // Location of cache directory
 
-	inCfg  *tls.Config
-	outCfg *tls.Config
-	ca     *x509.CertPool
+	// Network and communication
+	spot   *spotlib.Client // SpotLib client for peer communication
+	quicT  *quic.Transport // QUIC transport for efficient networking
+	Events *emitter.Hub    // Event hub for subscribers to listen to events
+	group  []byte          // Spot group key we are a member of
 
-	announceIdx uint64
+	// TLS configuration
+	inCfg  *tls.Config    // TLS config for incoming connections
+	outCfg *tls.Config    // TLS config for outgoing connections
+	ca     *x509.CertPool // Certificate authority pool
 
-	peers      map[string]*Peer
-	peersMutex sync.RWMutex
+	// Announcement tracking
+	announceIdx uint64 // Counter for announcements to avoid processing duplicates
 
-	transport http.RoundTripper
+	// Peer management
+	peers      map[string]*Peer // Map of connected peers by ID
+	peersMutex sync.RWMutex     // Mutex for safe concurrent access to peers map
 
-	status     int // 0=waiting 1=ready
-	statusLock sync.RWMutex
-	statusCond *sync.Cond
+	// HTTP transport
+	transport http.RoundTripper // HTTP transport for making HTTP requests
 
-	// DB
-	db          *bolt.DB
-	dbWatch     map[string][]DbWatchCallback
-	dbWatchLock sync.RWMutex
+	// Status management
+	status     int          // 0=waiting 1=ready
+	statusLock sync.RWMutex // Lock for status updates
+	statusCond *sync.Cond   // Condition variable for status change notification
 
-	// Meta-info
-	meta   map[string]any
-	metaLk sync.RWMutex
+	// Distributed database
+	db          *bolt.DB                     // BoltDB database for persistent storage
+	dbWatch     map[string][]DbWatchCallback // Callbacks for DB value changes
+	dbWatchLock sync.RWMutex                 // Lock for dbWatch map
 
-	// getfile callback
-	GetFile GetFileFunc
+	// Metadata storage
+	meta   map[string]any // Metadata to share with peers
+	metaLk sync.RWMutex   // Lock for metadata access
 
-	// seed: use a pointer for atomic seed details update
-	seed *seedData
+	// File operations
+	GetFile GetFileFunc // Callback for retrieving files
 
-	// locking
-	globalLocks   map[string]*globalLock
-	globalLocksLk sync.RWMutex
+	// Seed management
+	seed *seedData // Seed data for peer discovery, atomically updated
 
-	// cert cache
-	pubCert *crtCache
-	intCert *crtCache
+	// Distributed locking
+	globalLocks   map[string]*globalLock // Map of active distributed locks
+	globalLocksLk sync.RWMutex           // Lock for globalLocks map
 
-	// settings
-	settings        map[string]any
-	settingsUpdated time.Time
-	settingsLk      sync.Mutex
+	// Certificate caching
+	pubCert *crtCache // Public certificate cache
+	intCert *crtCache // Internal certificate cache
+
+	// Global settings
+	settings        map[string]any // Settings shared across the fleet
+	settingsUpdated time.Time      // Last time settings were updated
+	settingsLk      sync.Mutex     // Lock for settings access
 }
 
-// New will just initialize a basic agent without any settings
+// New initializes a basic agent with the provided options.
+// Options can be used to configure various aspects of the agent.
 func New(opts ...AgentOption) *Agent {
 	a := spawn()
 	for _, o := range opts {
@@ -101,11 +117,14 @@ func New(opts ...AgentOption) *Agent {
 	return a
 }
 
-// return a new agent using the provided GetFile method
+// WithGetFile creates a new agent with a custom file retrieval function.
+// This is a convenience wrapper around New() that sets the GetFile callback.
 func WithGetFile(f GetFileFunc, opts ...AgentOption) *Agent {
 	return New(append([]AgentOption{f}, opts...)...)
 }
 
+// spawn creates and initializes a new Agent instance with default values.
+// It uses the local hostname as the default identity.
 func spawn() *Agent {
 	local := "local"
 	if host, err := os.Hostname(); err == nil && host != "" {
@@ -119,41 +138,54 @@ func spawn() *Agent {
 		dbWatch:     make(map[string][]DbWatchCallback),
 		globalLocks: make(map[string]*globalLock),
 	}
+	// Initialize certificate caches
 	a.pubCert = &crtCache{a: a, k: "public_key"}
 	a.intCert = &crtCache{a: a, k: "internal_key"}
+	// Set up condition variable for status changes
 	a.statusCond = sync.NewCond(a.statusLock.RLocker())
+	// Ensure cleanup on garbage collection
 	runtime.SetFinalizer(a, closeAgentect)
 	return a
 }
 
+// start initializes all agent subsystems and registers the agent as the global instance.
+// This should be called after all configuration options have been applied.
 func (a *Agent) start() {
-	// perform various start actions
-	a.initPath()
-	a.initDb()
-	a.initSeed()
-	a.initSpot()
-	a.directoryThread()
-	a.channelSet()
+	// Initialize all subsystems in order
+	a.initPath()        // Set up path and directories
+	a.initDb()          // Initialize database
+	a.initSeed()        // Initialize peer discovery seed
+	a.initSpot()        // Start spot client for communication
+	a.directoryThread() // Start directory services
+	a.channelSet()      // Set up communication channels
 
-	// only setSelf() after everything has been started so we know Self() returns a ready instance
+	// Register this agent as the global instance
+	// Only done after everything is ready so Self() returns a functional instance
 	setSelf(a)
 }
 
+// closeAgentect is a finalizer function called by the garbage collector
 func closeAgentect(a *Agent) {
 	a.Close()
 }
 
+// Close shuts down the agent, closing all connections and resources.
+// This should be called when the agent is no longer needed.
 func (a *Agent) Close() {
-	a.shutdownDb()
-	a.shutdownSpot()
+	a.shutdownDb()   // Close database connections
+	a.shutdownSpot() // Shutdown spot client and connections
 }
 
+// GetStatus returns the current status of the agent.
+// 0 = initializing/waiting, 1 = ready
 func (a *Agent) GetStatus() int {
 	a.statusLock.RLock()
 	defer a.statusLock.RUnlock()
 	return a.status
 }
 
+// setStatus updates the agent's status and notifies waiting goroutines.
+// This triggers any goroutines waiting in WaitReady().
 func (a *Agent) setStatus(s int) {
 	a.statusLock.Lock()
 	defer a.statusLock.Unlock()
@@ -161,7 +193,9 @@ func (a *Agent) setStatus(s int) {
 	a.statusCond.Broadcast()
 }
 
-// WaitReady will lock until the agent is ready for operation (connected to other peers)
+// WaitReady blocks until the agent is ready for operation (connected to peers).
+// This is useful for applications that need to ensure the agent is fully operational
+// before proceeding with operations that depend on peer connectivity.
 func (a *Agent) WaitReady() {
 	a.statusLock.RLock()
 	defer a.statusLock.RUnlock()
@@ -170,6 +204,7 @@ func (a *Agent) WaitReady() {
 		if a.status == 1 {
 			return
 		}
+		// Wait for status change notification
 		a.statusCond.Wait()
 	}
 }
@@ -330,30 +365,45 @@ func (a *Agent) AltNames() []string {
 	return res
 }
 
-// BroadcastRpc broadcasts the given data to the specified endpoint
+// BroadcastRpc broadcasts the given data to the specified endpoint on all connected peers.
+// This method sends the same RPC call to all peers in the network but doesn't wait for responses.
+// It's useful for notifications or updates that need to propagate to all nodes.
+//
+// Parameters:
+//   - ctx: Context for the operation, which can be used for cancellation
+//   - endpoint: The name of the RPC endpoint to call on each peer
+//   - data: The data to send to each peer (will be serialized)
+//
+// Returns an error if the operation fails, or nil on success.
 func (a *Agent) BroadcastRpc(ctx context.Context, endpoint string, data any) error {
-	// send request
+	// Prepare the RPC packet
 	pkt := &PacketRpc{
-		SourceId: a.id,
-		Endpoint: endpoint,
-		Data:     data,
+		SourceId: a.id,     // Set the source as this agent
+		Endpoint: endpoint, // Set the target endpoint
+		Data:     data,     // Set the data payload
 	}
 
+	// Get all active peers
 	peers := a.GetPeers()
 
+	// If there are no peers, return early
 	if len(peers) == 0 {
 		return nil
 	}
 
+	// Send to all peers except self
 	for _, p := range peers {
 		if p.id == a.id {
-			// do not send to self
+			// Skip sending to self
 			continue
 		}
-		// do in gorouting in case connection lags or fails and triggers call to unregister that deadlocks because we hold a lock
+		// Clone the packet for each peer to avoid race conditions
 		pkt2 := &PacketRpc{}
 		*pkt2 = *pkt
 		pkt2.TargetId = p.id
+
+		// Send in a separate goroutine to avoid blocking if a peer is slow to respond
+		// This also prevents deadlocks if connection fails and triggers unregister while holding locks
 		go p.Send(ctx, pkt2)
 	}
 
@@ -764,29 +814,45 @@ func (a *Agent) RpcSend(ctx context.Context, id string, endpoint string, data []
 	return err
 }
 
+// RPC sends an RPC request to a specific peer and waits for a response.
+// This is the primary method for making remote procedure calls to other nodes in the fleet.
+//
+// Parameters:
+//   - ctx: Context for the operation, which can control timeouts and cancellation
+//   - id: The ID of the target peer
+//   - endpoint: The name of the RPC endpoint to call on the peer
+//   - data: The data to send with the request (will be serialized)
+//
+// Returns:
+//   - The response data from the peer (deserialized)
+//   - An error if the operation fails or the remote endpoint returns an error
 func (a *Agent) RPC(ctx context.Context, id string, endpoint string, data any) (any, error) {
+	// Look up the peer by ID
 	p := a.GetPeer(id)
 	if p == nil {
 		return nil, errors.New("failed to find peer")
 	}
 
+	// Create a response channel to receive the reply
 	resId, res := rchan.New()
-	defer resId.Release()
+	defer resId.Release() // Ensure the channel is released when done
 
-	// send request
+	// Prepare the RPC packet
 	pkt := &PacketRpc{
-		TargetId: id,
-		SourceId: a.id,
-		R:        resId,
-		Endpoint: endpoint,
-		Data:     data,
+		TargetId: id,       // Target peer ID
+		SourceId: a.id,     // Our ID as the source
+		R:        resId,    // Response channel ID
+		Endpoint: endpoint, // Target endpoint name
+		Data:     data,     // Payload data
 	}
 
+	// Send the request to the peer
 	p.Send(ctx, pkt)
 
-	// get response
+	// Wait for response or context cancellation
 	select {
 	case rany := <-res:
+		// Got a response, ensure it's the right type
 		r, ok := rany.(*PacketRpcResponse)
 		if !ok {
 			return nil, errors.New("invalid response type")
@@ -795,13 +861,17 @@ func (a *Agent) RPC(ctx context.Context, id string, endpoint string, data any) (
 			return nil, errors.New("failed to wait for response")
 		}
 
+		// Check if the remote endpoint returned an error
 		err := error(nil)
 		if r.HasError {
 			err = errors.New(r.Error)
 		}
 
+		// Return the response data and any error
 		return r.Data, err
+
 	case <-ctx.Done():
+		// Context was cancelled (timeout or explicit cancellation)
 		return nil, ctx.Err()
 	}
 }
