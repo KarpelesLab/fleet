@@ -2,7 +2,7 @@
 package fleet
 
 // TestOption defines an AgentOption that can be used for testing purposes.
-// This allows easier agent configuration in tests without modifying the 
+// This allows easier agent configuration in tests without modifying the
 // main codebase.
 type TestOption struct {
 	fn func(*Agent)

@@ -28,19 +28,19 @@ func TestForRaceConditions(t *testing.T) {
 func testConcurrentLocks(t *testing.T, a *Agent) {
 	const numLocks = 5
 	const numGoroutines = 3
-	
+
 	var wg sync.WaitGroup
-	
+
 	// Run tests for both local and global locks to test both code paths
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
-			
+
 			for j := 0; j < numLocks; j++ {
 				lockName := fmt.Sprintf("test-lock-%d-%d", n, j)
 				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-				
+
 				// Try to acquire the lock
 				lock, err := a.Lock(ctx, lockName)
 				if err == nil && lock != nil {
@@ -48,12 +48,12 @@ func testConcurrentLocks(t *testing.T, a *Agent) {
 					time.Sleep(10 * time.Millisecond)
 					lock.Release()
 				}
-				
+
 				cancel()
 			}
 		}(i)
 	}
-	
+
 	wg.Wait()
 }
 
@@ -70,7 +70,7 @@ func testConcurrentAcquireReleaseLeaks(t *testing.T) {
 		t.Fatalf("Failed to create agent")
 	}
 	defer a.Close()
-	
+
 	// Create several locks in succession
 	for i := 0; i < 100; i++ {
 		lockName := fmt.Sprintf("test-lock-%d", i)
@@ -82,7 +82,7 @@ func testConcurrentAcquireReleaseLeaks(t *testing.T) {
 		// Release immediately
 		lock.Release()
 	}
-	
+
 	// If there's a resource leak, running with -race would likely detect it
 	// This is more of a functional test than an assertion-based test
 }
