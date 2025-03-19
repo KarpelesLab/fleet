@@ -152,11 +152,12 @@ func spawn() *Agent {
 // This should be called after all configuration options have been applied.
 func (a *Agent) start() {
 	// Initialize all subsystems in order
-	a.initPath()   // Set up path and directories
-	a.initDb()     // Initialize database
-	a.initSeed()   // Initialize peer discovery seed
-	a.initSpot()   // Start spot client for communication
-	a.channelSet() // Set up communication channels
+	a.initPath()        // Set up path and directories
+	a.initDb()          // Initialize database
+	a.initSeed()        // Initialize peer discovery seed
+	a.initSpot()        // Start spot client for communication
+	a.directoryThread() // Start directory services
+	a.channelSet()      // Set up communication channels
 
 	// Register this agent as the global instance
 	// Only done after everything is ready so Self() returns a functional instance
