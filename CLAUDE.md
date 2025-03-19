@@ -8,7 +8,7 @@ make deps           # Install dependencies
 
 # Tests
 make test           # Run all tests
-go test -v github.com/TrisTech/fleet -run TestName  # Run specific test
+go test -v github.com/KarpelesLab/fleet -run TestName  # Run specific test
 ```
 
 ## Code Style

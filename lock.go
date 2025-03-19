@@ -125,10 +125,11 @@ func (a *Agent) makeLock(name, owner string, tm uint64, force bool) *globalLock 
 		a:       a,
 		timeout: time.Now().Add(30 * time.Minute), // Default timeout
 	}
-	// Lock the mutex to prevent concurrent modifications to aye/nay lists
-	lk.lk.Lock()
-	// Store the lock in the global map
+	// Store the lock in the global map, no need to lock the mutex yet
+	// since this function holds the agent's globalLocksLk
 	a.globalLocks[name] = lk
+	// Lock only after adding to the map to prevent deadlock when called from other methods
+	lk.lk.Lock()
 	return lk
 }
 

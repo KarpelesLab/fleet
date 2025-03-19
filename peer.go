@@ -284,6 +284,7 @@ func (p *Peer) monitor() {
 	}
 	defer p.unregister()
 	t := time.NewTicker(60 * time.Second)
+	defer t.Stop() // Ensure ticker is cleaned up
 
 	for {
 		select {
@@ -292,9 +293,17 @@ func (p *Peer) monitor() {
 			return
 		case <-t.C:
 			ann, err := p.fetchAnnounce(15 * time.Second)
-			if err == nil {
-				p.a.handleAnnounce(ann, p)
+			if err != nil {
+				slog.Debug(fmt.Sprintf("[fleet] Failed to fetch announce from peer %s: %s", p.id, err),
+					"event", "fleet:peer:announce_fetch_fail")
+				// Check if peer has been unresponsive for too long
+				if time.Since(p.aliveTime) > 5*time.Minute {
+					p.Close("unresponsive")
+					return
+				}
+				continue
 			}
+			p.a.handleAnnounce(ann, p)
 		}
 	}
 }
