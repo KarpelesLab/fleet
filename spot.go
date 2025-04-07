@@ -46,6 +46,7 @@ func (a *Agent) initSpot() {
 	a.spot, err = spotlib.New(kc, meta, handlers)
 	if err != nil {
 		slog.Debug(fmt.Sprintf("failed to init spot: %s", err), "event", "fleet:spot:init_fail")
+		return
 	}
 	// we use spot's events handler so some events like "status" (0|1) are easily available
 	a.Events = a.spot.Events
