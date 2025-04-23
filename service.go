@@ -131,6 +131,7 @@ func (a *Agent) Connect(id string, service string) (net.Conn, error) {
 }
 
 func (a *Agent) AddService(service string) (net.Listener, error) {
+	a.WaitReady()
 	pkt, err := a.spot.ListenPacket(service)
 	if err != nil {
 		return nil, err
