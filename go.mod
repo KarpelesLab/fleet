@@ -19,7 +19,7 @@ require (
 	github.com/google/go-tpm v0.9.3
 	github.com/google/go-tpm-tools v0.4.5
 	github.com/google/uuid v1.6.0
-	github.com/quic-go/quic-go v0.50.0
+	github.com/quic-go/quic-go v0.53.0
 	go.etcd.io/bbolt v1.4.0
 	golang.org/x/crypto v0.36.0
 )

@@ -47,8 +47,8 @@ func (a *Agent) Dial(network, addr string) (net.Conn, error) {
 }
 
 type quicBundle struct {
-	quic.Stream
-	c quic.Connection
+	*quic.Stream
+	c *quic.Conn
 }
 
 func (b *quicBundle) Close() error {
@@ -66,7 +66,7 @@ func (b *quicBundle) RemoteAddr() net.Addr {
 	return b.c.RemoteAddr()
 }
 
-func (b *quicBundle) Unwrap() (quic.Connection, quic.Stream) {
+func (b *quicBundle) Unwrap() (*quic.Conn, *quic.Stream) {
 	return b.c, b.Stream
 }
 
