@@ -358,62 +358,6 @@ func (d *yamlDb) close() {
 	// Nothing to do - data is already persisted
 }
 
-// getVersionKey gets the stamp from the "version" bucket using composite key.
-func (d *yamlDb) getVersionKey(bucket, key []byte) (DbStamp, error) {
-	// Composite key: bucket + NUL + key
-	fk := string(append(append(bucket, 0), key...))
-
-	d.RLock()
-	defer d.RUnlock()
-
-	b := d.data["version"]
-	if b == nil {
-		return DbZero(), fs.ErrNotExist
-	}
-
-	entry := b[fk]
-	if entry == nil || entry.value == nil {
-		return DbZero(), fs.ErrNotExist
-	}
-
-	// Value is the binary stamp
-	var stamp DbStamp
-	if err := stamp.UnmarshalBinary(entry.value); err != nil {
-		return DbZero(), err
-	}
-	return stamp, nil
-}
-
-// setVersionKey sets the stamp in the "version" bucket using composite key.
-func (d *yamlDb) setVersionKey(bucket, key []byte, stamp DbStamp) error {
-	// Composite key: bucket + NUL + key
-	fk := string(append(append(bucket, 0), key...))
-	stampBytes, _ := stamp.MarshalBinary()
-
-	d.Lock()
-
-	b := d.data["version"]
-	if b == nil {
-		b = make(map[string]*dbEntry)
-		d.data["version"] = b
-	}
-
-	b[fk] = &dbEntry{value: stampBytes, stamp: stamp}
-	d.Unlock()
-
-	return d.save()
-}
-
-// setNoSave sets value without saving (for batch operations like migration).
-func (d *yamlDb) setNoSave(bucket, key, val []byte, stamp DbStamp) {
-	b := d.data[string(bucket)]
-	if b == nil {
-		b = make(map[string]*dbEntry)
-		d.data[string(bucket)] = b
-	}
-	b[string(key)] = &dbEntry{value: val, stamp: stamp}
-}
-
 // updateVlog updates the version log (vlog bucket).
 func (d *yamlDb) updateVlog(bucket, key []byte, stamp DbStamp) {
 	d.Lock()
