@@ -5,8 +5,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"crypto/tls"
-	"encoding/asn1"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/gob"
@@ -30,7 +28,6 @@ import (
 // status information about the connection.
 type Peer struct {
 	// Connection and identity
-	c        *tls.Conn         // TLS connection to the peer
 	id       string            // Unique ID, format is "k:..."
 	idcard   *cryptutil.IDCard // Identity card with cryptographic information
 	name     string            // Human-readable name
@@ -52,7 +49,6 @@ type Peer struct {
 	// Synchronization
 	mutex sync.RWMutex // General mutex for peer state
 	unreg sync.Once    // Ensures unregister only happens once
-	write sync.Mutex   // Mutex for writing to connection
 
 	// Lifecycle management
 	alive chan struct{} // Channel closed when peer is no longer alive
@@ -402,38 +398,6 @@ func (p *Peer) handleDbRequest(pkt *PacketDbRequest) error {
 	}
 
 	return p.Send(context.Background(), res)
-}
-
-func (p *Peer) fetchUuidFromCertificate(tc *tls.Conn) error {
-	// grab certificate
-	chains := tc.ConnectionState().VerifiedChains
-	if len(chains) == 0 {
-		return errors.New("no peer certificate?")
-	}
-	if len(chains[0]) == 0 {
-		return errors.New("no peer certificate? (2)")
-	}
-
-	peer_cert := chains[0][0] // *x509.Certificate
-	// grab id
-	peer_subject := peer_cert.Subject
-	peer_id := ""
-	for _, name := range peer_subject.Names {
-		// oid(2.5.4.45) = UniqueIdentifier
-		if !name.Type.Equal(asn1.ObjectIdentifier{2, 5, 4, 45}) {
-			continue
-		}
-
-		peer_id = name.Value.(string)
-		break
-	}
-
-	if peer_id == "" {
-		return errors.New("failed to get peer id from cert")
-	}
-
-	p.id = peer_id
-	return nil
 }
 
 // Id returns the peer's internal ID, which is unique and can be used to send

@@ -9,41 +9,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
-	"net"
 	"runtime/debug"
 	"time"
 
 	"github.com/KarpelesLab/cryptutil"
 	"github.com/KarpelesLab/jwt"
 )
-
-type directoryPrivate struct {
-	// "Private":{"Division":"clfd-nc2oqp-57wv-eoxd-5h3f-3o4eahl4","Id":"clfdh-yiwybb-7rdr-gq5f-fk52-6mmxlxxe"}
-	Id       string
-	Division string
-}
-
-type directoryPeer struct {
-	//{"Name":"jp001","Version":"20211010151149/8fed26f","TimeOffset":53348333,"Private":{"Division":"clfd-qepiqm-ufgr-hh3d-v4p5-twwxysdy","Id":"clfdh-d27zrv-bymj-fb3i-fn5x-upy5awea"},"LastSeen":"2021-10-10T09:20:12.006662333Z","IP":"","Token":
-	Name     string // "jp001"
-	Version  string // "20211010151149/8fed26f"
-	Location string
-	IP       string   // public ip as seen by directory
-	AltIPs   []string // alternative local IPs reported by peer
-	Port     int
-	Private  *directoryPrivate
-}
-
-type directoryNs struct {
-	KeyId string
-	Name  string
-	Peers []*directoryPeer
-}
-
-type directoryPingResponse struct {
-	Myself    *directoryPeer
-	Namespace *directoryNs
-}
 
 func (a *Agent) directoryThread() {
 	a.spot.WaitOnline(context.Background())
@@ -124,7 +95,7 @@ func (a *Agent) directoryThreadStart() bool {
 
 	sgr := jwtInfo.Payload().GetString("sgr") // Spot Group (sha256 hash as hex)
 	if sgr == "" {
-		slog.Error(fmt.Sprintf("[fleet] JWT missing SpotGroup"), "event", "fleet:directory:jwt_sgr_missing")
+		slog.Error("[fleet] JWT missing SpotGroup", "event", "fleet:directory:jwt_sgr_missing")
 		slog.Info("[fleet] removing invalid jwt from database", "event", "fleet:directory:jwt_expunge")
 		a.dbFleetDel("internal_key:jwt")
 		return false
@@ -160,21 +131,4 @@ func (a *Agent) directoryThreadStart() bool {
 	a.setGroup(group)
 	a.setStatus(1)
 	return true
-}
-
-func getLocalIPs() []string {
-	var res []string
-
-	ifaces, _ := net.Interfaces()
-	for _, i := range ifaces {
-		if i.Flags&net.FlagLoopback == net.FlagLoopback {
-			// ignore loopback interfaces
-			continue
-		}
-		addrs, _ := i.Addrs()
-		for _, addr := range addrs {
-			res = append(res, addr.String())
-		}
-	}
-	return res
 }
