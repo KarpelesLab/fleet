@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 	"path"
 	"runtime/debug"
@@ -54,7 +53,7 @@ func (a *Agent) initSpot() {
 
 	pkt, err := a.spot.ListenPacket("fleet-packet")
 	if err != nil {
-		log.Printf("no? err=%s", err)
+		slog.Error(fmt.Sprintf("[fleet] failed to listen for fleet-packet: %s", err), "event", "fleet:spot:packet_listen_fail")
 	} else {
 		a.quicT = &quic.Transport{
 			Conn:               pkt,

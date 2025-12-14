@@ -248,8 +248,6 @@ func (a *Agent) doInit(token *jwt.Token) (err error) {
 	a.inCfg.RootCAs = a.ca
 	a.outCfg.RootCAs = a.ca
 
-	a.inCfg.NextProtos = []string{"fssh", "fbin", "p2p"}
-
 	// configure client auth
 	a.inCfg.ClientAuth = tls.RequireAndVerifyClientCert
 	a.inCfg.ClientCAs = a.ca

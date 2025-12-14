@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"time"
 
 	"golang.org/x/crypto/sha3"
@@ -83,37 +82,8 @@ func (a *Agent) initSeed() {
 		}
 	}
 
-	// Prepare buffer for seed (128 bytes of randomness)
-	s := make([]byte, 128)
-
-	// Legacy: Try to load from file (older versions stored the seed in a file)
-	if f, err := os.Open("fleet_seed.bin"); err == nil {
-		defer f.Close()
-
-		// Try to read the seed data
-		n, err := f.Read(s)
-		if n == 128 && err == nil {
-			// Read the timestamp that follows the seed
-			tsBin, err := io.ReadAll(f)
-			if err == nil {
-				t := time.Time{}
-				if t.UnmarshalBinary(tsBin) == nil {
-					// Successfully loaded from file
-					a.seed = makeSeed(s, t)
-					slog.Debug(fmt.Sprintf("[fleet] Initialized with saved cluster seed ID = %s", a.SeedId()),
-						"event", "fleet:seed:init")
-
-					// Migrate to database storage and remove the file
-					if a.seed.WriteToDisk(a) == nil {
-						os.Remove("fleet_seed.bin")
-					}
-					return
-				}
-			}
-		}
-	}
-
 	// No existing seed found, generate a new one
+	s := make([]byte, 128)
 	_, err := io.ReadFull(rand.Reader, s)
 	if err != nil {
 		panic(fmt.Sprintf("failed to initialize fleet seed: %s", err))

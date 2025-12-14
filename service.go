@@ -113,7 +113,6 @@ func (a *Agent) Connect(id string, service string) (net.Conn, error) {
 
 	cfg := a.outCfg.Clone()
 	cfg.ServerName = id
-	//cfg.NextProtos = []string{"p2p"}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
