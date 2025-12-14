@@ -36,9 +36,9 @@ type yamlBucket map[string]*yamlEntry
 // yamlEntry represents an entry in the YAML file.
 // Value is stored as string if valid UTF-8, otherwise as base64.
 type yamlEntry struct {
-	Value string `yaml:"value"`           // String value (plain text or base64-encoded)
+	Value  string `yaml:"value"`            // String value (plain text or base64-encoded)
 	Binary bool   `yaml:"binary,omitempty"` // True if Value is base64-encoded
-	Stamp string `yaml:"stamp,omitempty"`
+	Stamp  string `yaml:"stamp,omitempty"`
 }
 
 // yamlFile is the root structure for the YAML file.
