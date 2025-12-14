@@ -25,6 +25,19 @@ func (d *yamlDb) migrateFromBolt(boltPath string) error {
 	err = boltDb.View(func(tx *bolt.Tx) error {
 		return tx.ForEach(func(bucketName []byte, b *bolt.Bucket) error {
 			bucket := string(bucketName)
+
+			// Skip version bucket - stamps are now stored with entries
+			if bucket == "version" {
+				slog.Debug("skipping version bucket (no longer needed)")
+				return nil
+			}
+
+			// Skip vlog bucket - no longer used
+			if bucket == "vlog" {
+				slog.Debug("skipping vlog bucket (no longer needed)")
+				return nil
+			}
+
 			slog.Debug("migrating bucket", "bucket", bucket)
 
 			if d.data[bucket] == nil {
@@ -39,25 +52,15 @@ func (d *yamlDb) migrateFromBolt(boltPath string) error {
 
 				entry := &dbEntry{value: val}
 
-				// For version bucket, the value is the binary stamp
-				// For other buckets, try to get stamp from version bucket
-				if bucket == "version" {
-					// Value is the stamp itself, stored as binary
-					var stamp DbStamp
-					if err := stamp.UnmarshalBinary(val); err == nil {
-						entry.stamp = stamp
-					}
-				} else if bucket != "vlog" {
-					// Try to get version from version bucket
-					versionBucket := tx.Bucket([]byte("version"))
-					if versionBucket != nil {
-						// Composite key: bucket + NUL + key
-						fk := append(append([]byte(bucket), 0), k...)
-						if stampBytes := versionBucket.Get(fk); stampBytes != nil {
-							var stamp DbStamp
-							if err := stamp.UnmarshalBinary(stampBytes); err == nil {
-								entry.stamp = stamp
-							}
+				// Try to get version from version bucket
+				versionBucket := tx.Bucket([]byte("version"))
+				if versionBucket != nil {
+					// Composite key: bucket + NUL + key
+					fk := append(append([]byte(bucket), 0), k...)
+					if stampBytes := versionBucket.Get(fk); stampBytes != nil {
+						var stamp DbStamp
+						if err := stamp.UnmarshalBinary(stampBytes); err == nil {
+							entry.stamp = stamp
 						}
 					}
 				}

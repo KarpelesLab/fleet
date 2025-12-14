@@ -1,7 +1,6 @@
 package fleet
 
 import (
-	"bytes"
 	"encoding/base64"
 	"fmt"
 	"io/fs"
@@ -108,7 +107,61 @@ func (d *yamlDb) load() error {
 		}
 	}
 
+	// Migrate old format if needed
+	if d.migrateOldFormat() {
+		return d.saveUnlocked()
+	}
+
 	return nil
+}
+
+// migrateOldFormat migrates from old YAML format (version bucket, vlog bucket).
+// Returns true if migration was performed and save is needed.
+// Must be called with lock held.
+func (d *yamlDb) migrateOldFormat() bool {
+	migrated := false
+
+	// Check for old version bucket and migrate stamps to entries
+	if versionBucket, exists := d.data["version"]; exists && len(versionBucket) > 0 {
+		for fk, entry := range versionBucket {
+			if entry == nil || entry.value == nil {
+				continue
+			}
+			// fk is "bucket\0key", value is binary stamp
+			var stamp DbStamp
+			if err := stamp.UnmarshalBinary(entry.value); err != nil {
+				continue
+			}
+
+			// Parse bucket and key from fk
+			parts := strings.SplitN(fk, "\x00", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			bucket, key := parts[0], parts[1]
+
+			// Update the entry in the actual bucket with the stamp
+			if b, ok := d.data[bucket]; ok {
+				if e, ok := b[key]; ok && e != nil {
+					if !e.stamp.After(DbZero()) {
+						e.stamp = stamp
+					}
+				}
+			}
+		}
+
+		// Remove version bucket
+		delete(d.data, "version")
+		migrated = true
+	}
+
+	// Remove vlog bucket if present (no longer used)
+	if _, exists := d.data["vlog"]; exists {
+		delete(d.data, "vlog")
+		migrated = true
+	}
+
+	return migrated
 }
 
 // save writes the database to the YAML file atomically.
@@ -358,30 +411,48 @@ func (d *yamlDb) close() {
 	// Nothing to do - data is already persisted
 }
 
-// updateVlog updates the version log (vlog bucket).
-func (d *yamlDb) updateVlog(bucket, key []byte, stamp DbStamp) {
-	d.Lock()
-	defer d.Unlock()
+// allVersions returns an iterator over all entries with stamps across all buckets.
+// It yields bucket, key, value, and stamp for each entry that has a stamp.
+func (d *yamlDb) allVersions() func(yield func(bucket, key, val []byte, stamp DbStamp) bool) {
+	return func(yield func(bucket, key, val []byte, stamp DbStamp) bool) {
+		d.RLock()
+		defer d.RUnlock()
 
-	fk := append(append(bucket, 0), key...)
-	stampBytes, _ := stamp.MarshalBinary()
+		// Get sorted bucket names for consistent iteration
+		buckets := make([]string, 0, len(d.data))
+		for bucket := range d.data {
+			// Skip internal buckets
+			if bucket == "local" || bucket == "fleet" {
+				continue
+			}
+			buckets = append(buckets, bucket)
+		}
+		sort.Strings(buckets)
 
-	vlog := d.data["vlog"]
-	if vlog == nil {
-		vlog = make(map[string]*dbEntry)
-		d.data["vlog"] = vlog
-	}
+		for _, bucket := range buckets {
+			entries := d.data[bucket]
 
-	// Remove old entries pointing to this key
-	for vkey, entry := range vlog {
-		if entry != nil && bytes.Equal(entry.value, fk) {
-			delete(vlog, vkey)
+			// Get sorted keys
+			keys := make([]string, 0, len(entries))
+			for key := range entries {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+
+			for _, key := range keys {
+				entry := entries[key]
+				if entry == nil || entry.value == nil {
+					continue
+				}
+				// Only yield entries with stamps
+				if entry.stamp.After(DbZero()) {
+					if !yield([]byte(bucket), []byte(key), entry.value, entry.stamp) {
+						return
+					}
+				}
+			}
 		}
 	}
-
-	// Add new entry: key is stampBytes+fk, value is fk
-	vlogKey := string(append(stampBytes, fk...))
-	vlog[vlogKey] = &dbEntry{value: fk}
 }
 
 // parseStamp parses a timestamp string in format "seconds.nanoseconds".

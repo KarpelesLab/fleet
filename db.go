@@ -17,7 +17,7 @@ import (
 // Data is stored in-memory and persisted to a YAML file.
 //
 // Key features:
-// - Data is versioned with nanosecond timestamps
+// - Data is versioned with nanosecond timestamps (stored with each entry)
 // - Updates are automatically broadcast to all peers
 // - Conflict resolution based on timestamps
 // - Automatic synchronization on connection establishment
@@ -28,8 +28,6 @@ import (
 // - "fleet": Fleet internal configuration data
 // - "local": Local-only data that isn't synchronized
 // - "global": System-wide settings
-// - "version": Metadata about record versions
-// - "vlog": Change log for record updates
 
 // DbWatchCallback is a function type for callbacks triggered on database changes.
 // It receives the key that changed and its new value (or nil if deleted).
@@ -168,17 +166,10 @@ func (a *Agent) needDbEntry(bucket, key []byte, v DbStamp) bool {
 		// bucket "local" cannot be replicated
 		return false
 	}
-	// compute global key (bucket + NUL + key)
-	fk := append(append(bucket, 0), key...)
-	// check version
-	curV, err := a.dbSimpleGet([]byte("version"), fk)
+	// check version from stamp on the entry itself
+	_, curVT, err := a.db.getVersion(bucket, key)
 	if err != nil {
 		return true // yes, need
-	}
-	var curVT DbStamp
-	err = curVT.UnmarshalBinary(curV)
-	if err != nil {
-		return false
 	}
 
 	if bytes.HasSuffix(key, []byte{'!'}) {
@@ -195,17 +186,9 @@ func (a *Agent) feedDbSet(bucket, key, val []byte, v DbStamp) error {
 		return nil
 	}
 
-	// compute global key (bucket + NUL + key)
-	fk := append(append(bucket, 0), key...)
-	// check version
-	curV, err := a.dbSimpleGet([]byte("version"), fk)
-	if err == nil && len(curV) > 0 {
-		// decode curV
-		var curVT DbStamp
-		err = curVT.UnmarshalBinary(curV)
-		if err != nil {
-			return err
-		}
+	// check version from stamp on the entry itself
+	_, curVT, err := a.db.getVersion(bucket, key)
+	if err == nil {
 		// compare with v
 		if bytes.HasSuffix(key, []byte{'!'}) {
 			if !curVT.After(v) {
@@ -219,16 +202,7 @@ func (a *Agent) feedDbSet(bucket, key, val []byte, v DbStamp) error {
 		}
 	}
 
-	// update version bucket
-	vBin, _ := v.MarshalBinary()
-	if err := a.db.setWithStamp([]byte("version"), fk, vBin, v); err != nil {
-		return err
-	}
-
-	// update vlog
-	a.db.updateVlog(bucket, key, v)
-
-	// update actual data
+	// update actual data (stamp is stored with the entry itself)
 	if err := a.db.setWithStamp(bucket, key, val, v); err != nil {
 		return err
 	}
@@ -249,19 +223,10 @@ func (a *Agent) dbGetVersion(bucket, key []byte) (val []byte, stamp DbStamp, err
 func (a *Agent) databasePacket() *PacketDbVersions {
 	p := &PacketDbVersions{}
 
-	for k, v := range a.DbKeys([]byte("version"), nil) {
-		// version global key (bucket + NUL + key)
-		k2 := slices.Clone(k)
-		k3 := bytes.SplitN(k2, []byte{0}, 2)
-		if len(k3) == 2 {
-			if string(k3[0]) == "local" || string(k3[0]) == "fleet" {
-				continue
-			}
-			stamp := DbStamp{}
-			stamp.UnmarshalBinary(v)
-			p.Info = append(p.Info, &PacketDbVersionsEntry{Stamp: stamp, Bucket: k3[0], Key: k3[1]})
-		}
-	}
+	a.db.allVersions()(func(bucket, key, _ []byte, stamp DbStamp) bool {
+		p.Info = append(p.Info, &PacketDbVersionsEntry{Stamp: stamp, Bucket: slices.Clone(bucket), Key: slices.Clone(key)})
+		return true
+	})
 	return p
 }
 
