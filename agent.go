@@ -33,7 +33,6 @@ import (
 	"github.com/KarpelesLab/spotlib"
 	"github.com/KarpelesLab/tpmlib"
 	"github.com/quic-go/quic-go"
-	bolt "go.etcd.io/bbolt"
 )
 
 // GetFileFunc is a callback function type that retrieves files for the agent.
@@ -78,7 +77,7 @@ type Agent struct {
 	statusCond *sync.Cond   // Condition variable for status change notification
 
 	// Distributed database
-	db          *bolt.DB                     // BoltDB database for persistent storage
+	db          *yamlDb                      // YAML-backed database for persistent storage
 	dbWatch     map[string][]DbWatchCallback // Callbacks for DB value changes
 	dbWatchLock sync.RWMutex                 // Lock for dbWatch map
 

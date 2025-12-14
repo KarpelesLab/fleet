@@ -11,11 +11,10 @@ import (
 	"strings"
 
 	"github.com/KarpelesLab/goupd"
-	bolt "go.etcd.io/bbolt"
 )
 
 // The fleet database system provides a synchronized key-value store across all peers.
-// Each peer maintains a local BoltDB database that is automatically synchronized.
+// Data is stored in-memory and persisted to a YAML file.
 //
 // Key features:
 // - Data is versioned with nanosecond timestamps
@@ -36,24 +35,41 @@ import (
 // It receives the key that changed and its new value (or nil if deleted).
 type DbWatchCallback func(string, []byte)
 
-// initDb initializes the agent's database connection.
-// This opens or creates a BoltDB database in the user's configuration directory.
-// The database is used for both internal fleet state and application data.
+// initDb initializes the agent's database.
+// This creates an in-memory database backed by a YAML file.
+// If an existing bbolt database is found, it will be migrated to YAML format.
 func (a *Agent) initDb() {
-	// Open the Bolt database located in the config directory
 	d, err := os.UserConfigDir()
 	if err != nil {
 		panic(err)
 	}
-	// Create the project directory if it doesn't exist
 	d = filepath.Join(d, goupd.PROJECT_NAME)
 	EnsureDir(d)
 
-	// Open the database with file permissions set to 0600 (owner read/write only)
-	a.db, err = bolt.Open(filepath.Join(d, "fleet.db"), 0600, nil)
-	if err != nil {
-		panic(err)
+	yamlPath := filepath.Join(d, "fleet.yaml")
+	boltPath := filepath.Join(d, "fleet.db")
+
+	a.db = newYamlDb(yamlPath)
+
+	// Check if YAML file exists
+	if _, err := os.Stat(yamlPath); err == nil {
+		// YAML file exists, load it
+		if err := a.db.load(); err != nil {
+			panic(err)
+		}
+		return
 	}
+
+	// Check if bbolt file exists for migration
+	if _, err := os.Stat(boltPath); err == nil {
+		// Migrate from bbolt to YAML
+		if err := a.db.migrateFromBolt(boltPath); err != nil {
+			panic(err)
+		}
+		return
+	}
+
+	// Neither file exists - start with empty database
 }
 
 // DbGet retrieves a value from the shared fleet database.
@@ -203,49 +219,22 @@ func (a *Agent) feedDbSet(bucket, key, val []byte, v DbStamp) error {
 		}
 	}
 
-	// update
-	err = a.db.Update(func(tx *bolt.Tx) error {
-		vb, err := tx.CreateBucketIfNotExists([]byte("version"))
-		if err != nil {
-			return err
-		}
-		vl, err := tx.CreateBucketIfNotExists([]byte("vlog"))
-		if err != nil {
-			return err
-		}
-		b, err := tx.CreateBucketIfNotExists(bucket)
-		if err != nil {
-			return err
-		}
+	// update version bucket
+	vBin, _ := v.MarshalBinary()
+	if err := a.db.setWithStamp([]byte("version"), fk, vBin, v); err != nil {
+		return err
+	}
 
-		vBin, _ := v.MarshalBinary()
+	// update vlog
+	a.db.updateVlog(bucket, key, v)
 
-		err = vb.Put(fk, vBin)
-		if err != nil {
-			return err
-		}
-		// remove old entries from vlog
-		c := vl.Cursor()
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			if bytes.Equal(v, fk) {
-				vl.Delete(k) // this delete has no reason to fail, and even if it does it's not really an issue
-			}
-		}
+	// update actual data
+	if err := a.db.setWithStamp(bucket, key, val, v); err != nil {
+		return err
+	}
 
-		// add to vlog
-		err = vl.Put(append(vBin, fk...), fk)
-		if err != nil {
-			return err
-		}
-
-		if val == nil {
-			return b.Delete(key)
-		}
-
-		return b.Put(key, val)
-	})
 	go a.dbWatchTrigger(string(bucket), string(key), val)
-	return err
+	return nil
 }
 
 func (a *Agent) dbGetVersion(bucket, key []byte) (val []byte, stamp DbStamp, err error) {
@@ -254,28 +243,7 @@ func (a *Agent) dbGetVersion(bucket, key []byte) (val []byte, stamp DbStamp, err
 		err = fs.ErrNotExist
 		return
 	}
-	err = a.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucket)
-		if b == nil {
-			return fs.ErrNotExist
-		}
-		v := b.Get(key)
-		if v == nil {
-			return fs.ErrNotExist
-		}
-		val = make([]byte, len(v))
-		copy(val, v)
-
-		versionBucket := tx.Bucket([]byte("version"))
-		fk := append(append(bucket, 0), key...)
-		vers := versionBucket.Get(fk)
-		if v == nil {
-			// no stamp
-			return nil
-		}
-		return stamp.UnmarshalBinary(vers)
-	})
-	return
+	return a.db.getVersion(bucket, key)
 }
 
 func (a *Agent) databasePacket() *PacketDbVersions {
@@ -299,47 +267,17 @@ func (a *Agent) databasePacket() *PacketDbVersions {
 
 // internal setter
 func (a *Agent) dbSimpleSet(bucket, key, val []byte) error {
-	return a.db.Update(func(tx *bolt.Tx) error {
-		b, err := tx.CreateBucketIfNotExists(bucket)
-		if err != nil {
-			return err
-		}
-		return b.Put(key, val)
-	})
+	return a.db.set(bucket, key, val)
 }
 
 // internal delete
 func (a *Agent) dbSimpleDel(bucket []byte, keys ...[]byte) error {
-	return a.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucket)
-		if b == nil {
-			return nil
-		}
-		for _, key := range keys {
-			if err := b.Delete(key); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	return a.db.del(bucket, keys...)
 }
 
 // internal getter
-func (a *Agent) dbSimpleGet(bucket, key []byte) (r []byte, err error) {
-	err = a.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(bucket)
-		if b == nil {
-			return fs.ErrNotExist
-		}
-		v := b.Get(key)
-		if v == nil {
-			return fs.ErrNotExist
-		}
-		r = make([]byte, len(v))
-		copy(r, v)
-		return nil
-	})
-	return
+func (a *Agent) dbSimpleGet(bucket, key []byte) ([]byte, error) {
+	return a.db.get(bucket, key)
 }
 
 // dbFleetLoad is similar to dbFleetGet except it always attempt to load data from getFile first
@@ -401,40 +339,9 @@ func (a *Agent) dbFleetDel(keynames ...string) error {
 }
 
 func (a *Agent) DbKeys(bucket, prefix []byte) func(yield func(k, v []byte) bool) {
-	return func(yield func(k, v []byte) bool) {
-		a.db.View(func(tx *bolt.Tx) error {
-			b := tx.Bucket(bucket)
-			if b == nil {
-				// no data
-				return nil
-			}
-			c := b.Cursor()
-			if prefix != nil {
-				k, v := c.Seek(prefix)
-				if k == nil {
-					// could not seek?
-					return nil
-				}
-				for k != nil && bytes.HasPrefix(k, prefix) {
-					if !yield(k[len(prefix):], v) {
-						break
-					}
-					k, v = c.Next()
-				}
-				return nil
-			}
-			k, v := c.First()
-			for k != nil {
-				if !yield(k, v) {
-					break
-				}
-				k, v = c.Next()
-			}
-			return nil
-		})
-	}
+	return a.db.keys(bucket, prefix)
 }
 
 func (a *Agent) shutdownDb() {
-	a.db.Close()
+	a.db.close()
 }
