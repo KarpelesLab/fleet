@@ -17,7 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/KarpelesLab/cryptutil"
+	"github.com/BottleFmt/gobottle"
 	"github.com/KarpelesLab/goupd"
 	"github.com/KarpelesLab/spotlib"
 	"github.com/fxamacker/cbor/v2"
@@ -28,11 +28,11 @@ import (
 // status information about the connection.
 type Peer struct {
 	// Connection and identity
-	id       string            // Unique ID, format is "k:..."
-	idcard   *cryptutil.IDCard // Identity card with cryptographic information
-	name     string            // Human-readable name
-	division string            // Logical grouping/location (like a datacenter/region)
-	valid    bool              // Whether this peer is valid/authenticated
+	id       string           // Unique ID, format is "k:..."
+	idcard   *gobottle.IDCard // Identity card with cryptographic information
+	name     string           // Human-readable name
+	division string           // Logical grouping/location (like a datacenter/region)
+	valid    bool             // Whether this peer is valid/authenticated
 
 	// Status tracking
 	annIdx    uint64        // Last announcement index received
@@ -66,9 +66,9 @@ type Peer struct {
 //   - pid: The cryptographic identity card of the remote peer
 //
 // Returns a connected Peer object or nil if the connection fails or is to self.
-func (a *Agent) makePeer(pid *cryptutil.IDCard) *Peer {
+func (a *Agent) makePeer(pid *gobottle.IDCard) *Peer {
 	// Generate unique ID from the peer's public key
-	idStr := "k." + base64.RawURLEncoding.EncodeToString(cryptutil.Hash(pid.Self, sha256.New))
+	idStr := "k." + base64.RawURLEncoding.EncodeToString(gobottle.Hash(pid.Self, sha256.New))
 
 	// Avoid connecting to self
 	if idStr == a.id {

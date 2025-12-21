@@ -25,8 +25,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/BottleFmt/gobottle"
 	"github.com/KarpelesLab/cloudinfo"
-	"github.com/KarpelesLab/cryptutil"
 	"github.com/KarpelesLab/emitter"
 	"github.com/KarpelesLab/jwt"
 	"github.com/KarpelesLab/rchan"
@@ -1079,7 +1079,7 @@ func (a *Agent) DumpInfo(w io.Writer) {
 	fmt.Fprintf(w, "Division:   %s\n", a.division)
 	fmt.Fprintf(w, "Local ID:   %s\n", a.id)
 	if a.group != nil {
-		fmt.Fprintf(w, "Group:      %s\n", base64.RawURLEncoding.EncodeToString(cryptutil.Hash(a.group, sha256.New)))
+		fmt.Fprintf(w, "Group:      %s\n", base64.RawURLEncoding.EncodeToString(gobottle.Hash(a.group, sha256.New)))
 	} else {
 		fmt.Fprintf(w, "Group:      N/A\n")
 	}

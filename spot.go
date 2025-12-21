@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/KarpelesLab/cryptutil"
+	"github.com/BottleFmt/gobottle"
 	"github.com/KarpelesLab/goupd"
 	"github.com/KarpelesLab/spotlib"
 	"github.com/KarpelesLab/spotproto"
@@ -24,8 +24,8 @@ func (a *Agent) initSpot() {
 		slog.Debug(fmt.Sprintf("failed to fetch local key: %s", err), "event", "fleet:spot:key_fail")
 		return
 	}
-	kc := cryptutil.NewKeychain()
-	if tk, ok := k.(interface{ Keychain() *cryptutil.Keychain }); ok {
+	kc := gobottle.NewKeychain()
+	if tk, ok := k.(interface{ Keychain() *gobottle.Keychain }); ok {
 		kc = tk.Keychain()
 	} else {
 		kc.AddKey(k)
@@ -131,7 +131,7 @@ func (a *Agent) spotFbinHandler(msg *spotproto.Message) ([]byte, error) {
 }
 
 // isFriend returns true if id is member of our group
-func (a *Agent) isFriend(id *cryptutil.IDCard) bool {
+func (a *Agent) isFriend(id *gobottle.IDCard) bool {
 	grp := a.group
 	if grp == nil {
 		return false
